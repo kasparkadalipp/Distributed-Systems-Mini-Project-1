@@ -1,0 +1,83 @@
+syntax = "proto3";
+
+package project;
+
+enum Status {
+  SUCCESS = 0;
+  FAILURE = 1;
+}
+
+enum Player {
+  O = 0;
+  X = 1;
+}
+
+
+service ClockService {
+  // Used by leader to qurey nodes for their time
+  rpc GetTime(TimeRequest) returns (TimeResponse) {}
+  
+  // Used by leader to inform nodes about required clock adjustments
+  rpc AdjustClock(AdjustClockRequest) returns (AdjustClockResponse) {}
+  
+  // Used by leader for manual clock adjustments
+  rpc SetClock(SetClockRequest) returns (SetClockResponse) {}
+}
+
+message TimeRequest {
+}
+
+message TimeResponse {
+  // unix timestamp (milliseconds since epoch)
+  uint64 unix_time_ms = 1;
+}
+
+message AdjustClockRequest {
+  // offset in milliseconds to be added to current clock:
+  // - positive value indicating amount of milliseconds to be added (in case node time lags behind current time)
+  // - negative value indicating amount of milliseconds to be substracted (in case node time leads in front of current time)
+  int64 offset_ms = 1;
+}
+
+message AdjustClockResponse {
+  // request will result in failure in case issued by non-leader node
+  Status status = 1;
+  string message = 2;
+}
+
+message SetClockRequest {
+  // unix timestamp (milliseconds since epoch)
+  uint64 unix_time_ms = 1;
+}
+
+message SetClockResponse {
+  // request will result in failure in case issued by non-leader node
+  Status status = 1;
+  string message = 2;
+}
+
+
+service GameService {
+  // Some ideas about the missing/remaining stuff:
+  // - Master should, upon start of game, assign symbol (O/X) to slave nodes
+  // - Master needs to inform slaves once it is their turn (board state should be included, including for what player the turn needs to be made for)
+  
+  rpc GetBoard(GetBoardRequest) returns (GetBoardResponse) {}
+}
+
+message GetBoardRequest {
+}
+
+message GetBoardResponse {
+  // request will result in failure in case issued to non-leader node
+  Status status = 1;
+  string message = 2;
+
+  // maps field identifier (number between 0 and 8) to player that occupies field (if any)
+  map<uint32,Player> board = 3;
+}
+
+
+service ElectionService {
+  // Need to agree upon algorithm...
+}
