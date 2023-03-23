@@ -1,0 +1,28 @@
+//python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. tictactoe.proto
+syntax = "proto3";
+
+service TicTacToe {
+  rpc StartGame (StartGameRequest) returns (StartGameResponse);
+  rpc SetSymbol (SetSymbolRequest) returns (SetSymbolResponse);
+  rpc ListBoard (ListBoardRequest) returns (ListBoardResponse);
+  rpc SetNodeTime (SetNodeTimeRequest) returns (SetNodeTimeResponse);
+
+  // the function will handle the election process
+  rpc Election (ElectionRequest) returns (ElectionResponse);
+  // assigns the leader to the node
+  rpc Leader (LeaderRequest) returns (LeaderResponse);
+}
+
+message StartGameRequest {}
+message StartGameResponse { bool gameStarted = 1; }
+message SetSymbolRequest { int32 cellId = 1; string symbol = 2; }
+message SetSymbolResponse { bool success = 1; string errorMessage = 2; }
+message ListBoardRequest {}
+message ListBoardResponse { string boardState = 1; }
+message SetNodeTimeRequest { string nodeId = 1; string time = 2; }
+message SetNodeTimeResponse { string status = 1; }
+
+message ElectionRequest { int32 senderNodeId = 1; }
+message ElectionResponse { bool acknowledged = 1; }
+message LeaderRequest { int32 senderNodeId = 1; }
+message LeaderResponse { bool acknowledged = 1; }
