@@ -12,17 +12,43 @@ enum Player {
   X = 1;
 }
 
+enum Result {
+  DRAW = 0;
+  WIN = 1;
+  LOSS = 2;
+}
 
-service ClockService {
-  // Used by leader to qurey nodes for their time
+service GameService {
+  // ================== TIME SYNCHRONISATION ======================
+   // Used by leader to query nodes for their time
   rpc GetTime(TimeRequest) returns (TimeResponse) {}
-  
+
   // Used by leader to inform nodes about required clock adjustments
   rpc AdjustClock(AdjustClockRequest) returns (AdjustClockResponse) {}
-  
+
   // Used by leader for manual clock adjustments
   rpc SetClock(SetClockRequest) returns (SetClockResponse) {}
+
+
+  // ================== LEADER ELECTION ======================
+  // the function will handle the election process
+  rpc AssumeLeader (LeaderRequest) returns (LeaderResponse);
+  // new leader is ready to take over
+  rpc Coordinator (NewLeader) returns (Acknowledged);
+
+  // ================== GAME LOGIC ======================
+  // Some ideas about the missing/remaining stuff:
+  // - Master should, upon start of game, assign symbol (O/X) to slave nodes
+  // - Master needs to inform slaves once it is their turn (board state should be included, including for what player the turn needs to be made for)
+  rpc JoinGame (JoinGameRequest) returns (JoinGameResponse);
+  rpc ListBoard (ListBoardRequest) returns (ListBoardResponse);
+  rpc RequestMove (RequestTurn) returns (Acknowledged);
+  // place X or O
+  rpc MakeTurn (MakeTurn) returns (MakeTurnResponse);
+  rpc DeclareWinner (AnnounceWinner) returns (Acknowledged);
 }
+
+
 
 message TimeRequest {
 }
@@ -57,18 +83,45 @@ message SetClockResponse {
 }
 
 
-service GameService {
-  // Some ideas about the missing/remaining stuff:
-  // - Master should, upon start of game, assign symbol (O/X) to slave nodes
-  // - Master needs to inform slaves once it is their turn (board state should be included, including for what player the turn needs to be made for)
-  
-  rpc GetBoard(GetBoardRequest) returns (GetBoardResponse) {}
+message LeaderRequest { int32 senderNodeId = 1; }
+message LeaderResponse { bool acknowledged = 1; }
+message NewLeader { int32 coordinator_id = 1; }
+message Acknowledged{ }
+
+message AnnounceWinner {
+  string board_state = 1;
+  bool is_winner = 2;
 }
 
-message GetBoardRequest {
+message MakeTurnResponse {
+  // request will result in failure in case issued by non-leader node
+  Status status = 1;
+  string message = 2;
 }
 
-message GetBoardResponse {
+message RequestTurn {
+  string board_state = 1;
+  Player mark = 2;
+}
+
+message MakeTurn {
+  int32 player_id = 1;
+  int32 board_position = 2;
+}
+
+
+message JoinGameRequest {
+  int32 player_id = 1;
+}
+
+message JoinGameResponse {
+  bool gameStarted = 1;
+}
+
+message ListBoardRequest {
+}
+
+message ListBoardResponse {
   // request will result in failure in case issued to non-leader node
   Status status = 1;
   string message = 2;
