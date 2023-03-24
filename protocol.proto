@@ -20,21 +20,18 @@ enum Result {
 
 service GameService {
   // ================== TIME SYNCHRONISATION ======================
-   // Used by leader to query nodes for their time
+  // Used by leader to query nodes for their time
   rpc GetTime(TimeRequest) returns (TimeResponse) {}
-
   // Used by leader to inform nodes about required clock adjustments
   rpc AdjustClock(AdjustClockRequest) returns (AdjustClockResponse) {}
-
   // Used by leader for manual clock adjustments
   rpc SetClock(SetClockRequest) returns (SetClockResponse) {}
-
 
   // ================== LEADER ELECTION ======================
   // the function will handle the election process
   rpc AssumeLeader (LeaderRequest) returns (LeaderResponse);
   // new leader is ready to take over
-  rpc Coordinator (NewLeader) returns (Acknowledged);
+  rpc NotifyOfNewLeader (NewLeader) returns (Acknowledged);
 
   // ================== GAME LOGIC ======================
   // Some ideas about the missing/remaining stuff:
@@ -43,15 +40,12 @@ service GameService {
   rpc JoinGame (JoinGameRequest) returns (JoinGameResponse);
   rpc ListBoard (ListBoardRequest) returns (ListBoardResponse);
   rpc RequestMove (RequestTurn) returns (Acknowledged);
-  // place X or O
-  rpc MakeTurn (MakeTurn) returns (MakeTurnResponse);
+  rpc MakeTurn (MakeTurnRequest) returns (MakeTurnResponse); // place X or O
   rpc DeclareWinner (AnnounceWinner) returns (Acknowledged);
 }
 
-
-
-message TimeRequest {
-}
+// ================== TIME SYNCHRONISATION ======================
+message TimeRequest {}
 
 message TimeResponse {
   // unix timestamp (milliseconds since epoch)
@@ -61,7 +55,7 @@ message TimeResponse {
 message AdjustClockRequest {
   // offset in milliseconds to be added to current clock:
   // - positive value indicating amount of milliseconds to be added (in case node time lags behind current time)
-  // - negative value indicating amount of milliseconds to be substracted (in case node time leads in front of current time)
+  // - negative value indicating amount of milliseconds to be subtracted (in case node time leads in front of current time)
   int64 offset_ms = 1;
 }
 
@@ -82,12 +76,23 @@ message SetClockResponse {
   string message = 2;
 }
 
+// ================== LEADER ELECTION ======================
+message LeaderRequest {
+  // request to become new leader
+  uint32 node_id = 1;
+}
 
-message LeaderRequest { int32 senderNodeId = 1; }
-message LeaderResponse { bool acknowledged = 1; }
-message NewLeader { int32 coordinator_id = 1; }
-message Acknowledged{ }
+message LeaderResponse {
+  bool acknowledged = 1;
+}
 
+message NewLeader {
+  uint32 leader_id = 1;
+}
+
+message Acknowledged{}
+
+// ================== GAME LOGIC ======================
 message AnnounceWinner {
   string board_state = 1;
   bool is_winner = 2;
@@ -104,7 +109,7 @@ message RequestTurn {
   Player mark = 2;
 }
 
-message MakeTurn {
+message MakeTurnRequest {
   int32 player_id = 1;
   int32 board_position = 2;
 }
@@ -115,7 +120,7 @@ message JoinGameRequest {
 }
 
 message JoinGameResponse {
-  bool gameStarted = 1;
+  bool game_started = 1;
 }
 
 message ListBoardRequest {
@@ -127,10 +132,5 @@ message ListBoardResponse {
   string message = 2;
 
   // maps field identifier (number between 0 and 8) to player that occupies field (if any)
-  map<uint32,Player> board = 3;
-}
-
-
-service ElectionService {
-  // Need to agree upon algorithm...
+  map<uint32, Player> board = 3;
 }
