@@ -13,15 +13,14 @@ class EtcdThread(threading.Thread):
         self.stop_event = stop_event
 
     def run(self):
-        pass
-        # proc = subprocess.Popen(['etcd'])
-        #
-        # while not self.stop_event.is_set():
-        #     time.sleep(1)
-        #     break
-        #
-        # # clean up etcd data
-        # proc = subprocess.Popen(['rm', '-rf', 'default.etcd/member'])
+        proc = subprocess.Popen(['etcd'])
+
+        while not self.stop_event.is_set():
+            time.sleep(1)
+            break
+
+        # clean up etcd data
+        proc = subprocess.Popen(['rm', '-rf', 'default.etcd/member'])
 
 
 class NodeThread(threading.Thread):
