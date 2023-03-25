@@ -1,13 +1,13 @@
 import socket
-import etcd3
 import sys
 import random
-import protocol_pb2_grpc
-import protocol_pb2
 import threading
-import grpc
 import concurrent
 import time
+import grpc
+import etcd3
+import protocol_pb2
+import protocol_pb2_grpc
 
 # Hackish way to get the address to bind to.
 # Error prone, as computers tend to have multiple interface,
@@ -43,7 +43,7 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
             self.register()
             if not self.has_healthy_master():
                 self.election()
-            if (self.node_id == self.leader_id):
+            if self.node_id == self.leader_id:
                 self.time_sync()
             time.sleep(1)
 
@@ -53,15 +53,15 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
 
     def has_healthy_master(self):
         """Returns true if local node is aware of current leader and current leader is up and running, i.e. reachable"""
-        nodes = {node_id: address for node_id, address in self.cluster_nodes()}
+        nodes = dict(self.cluster_nodes())
         if not self.leader_id in nodes:
             return False
         with grpc.insecure_channel(nodes[self.leader_id]) as channel:
             stub = protocol_pb2_grpc.GameServiceStub(channel)
             try:
-                response = stub.Echo(protocol_pb2.Ping(),timeout=self.timeout)
+                stub.Echo(protocol_pb2.Ping(),timeout=self.timeout)
                 return True
-            except Exception as e:
+            except Exception:
                 return False
 
     def election(self):
@@ -82,7 +82,7 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
                     if not future.result(timeout=self.timeout).acknowledged:
                         # Node did not not acknowledge us as leader, aborting process on this node
                         return
-                except Exception as e:
+                except Exception:
                     # Assume node_id is dead and no longer active, remove stale entries from service discovery
                     self.etcd.delete(f"/nodes/{node_id}")
 
@@ -107,7 +107,7 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
         return protocol_pb2.LeaderResponse(acknowledged=request.node_id < self.node_id)
 
     def NotifyOfNewLeader(self, request, context):
-        if (self.leader_id != request.leader_id):
+        if self.leader_id != request.leader_id:
             print(f"Elected leader: {request.leader_id}")
             self.leader_id = request.leader_id
         return protocol_pb2.Acknowledged()
