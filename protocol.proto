@@ -1,5 +1,7 @@
 syntax = "proto3";
 
+import "google/protobuf/timestamp.proto";
+
 package project;
 
 enum Status {
@@ -7,7 +9,7 @@ enum Status {
   FAILURE = 1;
 }
 
-enum Player {
+enum Marker {
   O = 0;
   X = 1;
 }
@@ -39,8 +41,8 @@ service GameService {
   // - Master needs to inform slaves once it is their turn (board state should be included, including for what player the turn needs to be made for)
   rpc JoinGame (JoinGameRequest) returns (JoinGameResponse);
   rpc ListBoard (ListBoardRequest) returns (ListBoardResponse);
-  rpc RequestMove (RequestTurn) returns (Acknowledged);
-  rpc MakeTurn (MakeTurnRequest) returns (MakeTurnResponse); // place X or O
+  rpc PlayerTurn (RequestTurn) returns (Acknowledged);
+  rpc PlaceMarker (PlaceMarkerRequest) returns (PlaceMarkerResponse); // place X or O
   rpc DeclareWinner (AnnounceWinner) returns (Acknowledged);
 }
 
@@ -49,7 +51,7 @@ message TimeRequest {}
 
 message TimeResponse {
   // unix timestamp (milliseconds since epoch)
-  uint64 unix_time_ms = 1;
+  google.protobuf.Timestamp unix_time_ms = 1;
 }
 
 message AdjustClockRequest {
@@ -67,7 +69,7 @@ message AdjustClockResponse {
 
 message SetClockRequest {
   // unix timestamp (milliseconds since epoch)
-  uint64 unix_time_ms = 1;
+  google.protobuf.Timestamp unix_time_ms = 1;
 }
 
 message SetClockResponse {
@@ -98,7 +100,7 @@ message AnnounceWinner {
   bool is_winner = 2;
 }
 
-message MakeTurnResponse {
+message PlaceMarkerResponse {
   // request will result in failure in case issued by non-leader node
   Status status = 1;
   string message = 2;
@@ -106,10 +108,10 @@ message MakeTurnResponse {
 
 message RequestTurn {
   string board_state = 1;
-  Player mark = 2;
+  Marker marker = 2;
 }
 
-message MakeTurnRequest {
+message PlaceMarkerRequest {
   int32 player_id = 1;
   int32 board_position = 2;
 }
@@ -132,5 +134,5 @@ message ListBoardResponse {
   string message = 2;
 
   // maps field identifier (number between 0 and 8) to player that occupies field (if any)
-  map<uint32, Player> board = 3;
+  map<uint32, Marker> board = 3;
 }
