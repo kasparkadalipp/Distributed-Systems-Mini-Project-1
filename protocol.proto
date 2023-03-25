@@ -37,6 +37,8 @@ service GameService {
   rpc AssumeLeader (LeaderRequest) returns (LeaderResponse);
   // new leader is ready to take over
   rpc NotifyOfNewLeader (NewLeader) returns (Acknowledged);
+  // Simple echo message which can be used to determine if the current leader is alive
+  rpc Echo(Ping) returns (Pong);
 
   // ================== GAME LOGIC ======================
   // Some ideas about the missing/remaining stuff:
@@ -96,6 +98,8 @@ message NewLeader {
 }
 
 message Acknowledged{}
+message Ping{}
+message Pong{}
 
 // ================== GAME LOGIC ======================
 message AnnounceWinner {

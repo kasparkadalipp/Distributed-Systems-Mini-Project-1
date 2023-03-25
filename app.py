@@ -24,27 +24,28 @@ class EtcdThread(threading.Thread):
 
 
 class NodeThread(threading.Thread):
-    def __init__(self, stop_event, etcd_host, etcd_port):
+    def __init__(self, stop_event, port, etcd_host, etcd_port):
         threading.Thread.__init__(self)
         self.daemon = True
         self.stop_event = stop_event
         self.etcd_host = etcd_host
         self.etcd_port = etcd_port
+        self.port = port
+
 
     def run(self):
-        node = Node(etcd_host=self.etcd_host, etcd_port=self.etcd_port)
-        print(f"Node {node.node_id} started at {node.address}")
+        node = Node(node_port=self.port, etcd_host=self.etcd_host,
+                    etcd_port=self.etcd_port)
 
         while not self.stop_event.is_set():
-            node.discover_nodes()
             time.sleep(3)
-
 
 
 def start_node_threads(num_nodes, etcd_host, etcd_port):
     node_threads = []
-    for _ in range(num_nodes):
-        node_thread = NodeThread(threading.Event(), etcd_host, etcd_port)
+    for i in range(num_nodes):
+        node_thread = NodeThread(
+            threading.Event(), 50000+i, etcd_host, etcd_port)
         node_thread.start()
         node_threads.append(node_thread)
         time.sleep(1)
