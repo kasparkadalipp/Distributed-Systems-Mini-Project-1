@@ -5,19 +5,22 @@ import "google/protobuf/timestamp.proto";
 package project;
 
 enum Status {
-  SUCCESS = 0;
-  FAILURE = 1;
+  STATUS_UNSPECIFIED = 0;
+  SUCCESS = 1;
+  FAILURE = 2;
 }
 
 enum Marker {
-  O = 0;
-  X = 1;
+  MARKER_UNSPECIFIED = 0;
+  O = 1;
+  X = 2;
 }
 
 enum Result {
-  DRAW = 0;
-  WIN = 1;
-  LOSS = 2;
+  RESULT_UNSPECIFIED = 0;
+  DRAW = 1;
+  WIN = 2;
+  LOSS = 3;
 }
 
 service GameService {
