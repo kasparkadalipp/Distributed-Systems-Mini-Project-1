@@ -20,29 +20,6 @@ def get_host_ip():
     hostname = socket.gethostname()
     return socket.gethostbyname(hostname)
 
-def initiate_request(from_node, to_node_address, action, extra_args=None):
-    print(f"Initiating {action} request from {from_node.node_id} to {to_node_address}")
-    with grpc.insecure_channel(to_node_address) as channel:
-        stub = protocol_pb2_grpc.GameServiceStub(channel)
-        if action == "join":
-            response = stub.JoinGame(protocol_pb2.JoinGameRequest(request_id=from_node.node_id))
-        elif action == "place":
-            extra_args = {}
-            position = input("Enter position: ")
-            extra_args["board_position"] = int(position)
-            response = stub.PlaceMarker(protocol_pb2.PlaceMarkerRequest(request_id=from_node.node_id, board_position=extra_args["board_position"]))
-        elif action == "turn":
-            response = stub.PlayerTurn(protocol_pb2.PlayerTurnRequest(request_id=from_node.node_id, board_state=from_node.game.board, marker=from_node.game.players[from_node.game.turn % 2]))
-        elif action == "board":
-            response = stub.ListBoard(protocol_pb2.ListBoardRequest())
-        elif action == "list":
-            # print all attributes of node
-            print(from_node.__dict__)
-        else:
-            print("Invalid action")
-        return response
-
-
 class Game:
 
     def __init__(self):
@@ -54,21 +31,27 @@ class Game:
         self.players = ["O", "X"]
         self.move_list = {}
 
-    def convert_board(self, board):
+    def get_board(self):
 
-        self.board = board
-
-        return f""" {self.board[0]}|{self.board[1]}|{self.board[2]}
+        return f""" 
+        
+        
+                    {self.board[0]}|{self.board[1]}|{self.board[2]}
                     -----
                     {self.board[3]}|{self.board[4]}|{self.board[5]}
                     -----
-                    {self.board[6]}|{self.board[7]}|{self.board[8]}"""
+                    {self.board[6]}|{self.board[7]}|{self.board[8]}
+                    
+                    
+                    
+            """
 
     def move(self, player, position):
-
+        symbol = "O" if player == 1 else "X"
+        print(f"Player {symbol} is moving to position {position}")
         if self.board[position] == " ":
-            self.board[position] = player
-            self.move_list[position] = (player, datetime.datetime.now())
+            self.board[position] = symbol
+            self.move_list[position] = (symbol, datetime.datetime.now())
             self.turn += 1
             self.check_winner()
             return True
@@ -94,15 +77,12 @@ class Game:
     def get_player_turn(self):
         return self.players[self.turn % 2] if self.turn < 9 else None
 
-    def get_board(self):
-        return self.board
-
 class Node(protocol_pb2_grpc.GameServiceServicer):
     def __init__(self, node_port, etcd_host, etcd_port):
         self.server = None
         self.timeout = 1  # timeout used for RPC calls in seconds
         self.leader_id = None
-        self.node_id = node_port # self.generate_unique_node_id()
+        self.node_id = node_port  # self.generate_unique_node_id()
         self.port = node_port
         self.address = f"{get_host_ip()}:{self.port}"
         self.leader_address = None
@@ -112,7 +92,11 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
         self.game_over = False
         self.leader = False
         self.player = None
-        self.players = {} # <playerid, (address,symbol)>, players[game_id] = {} would be another way to manage concurrently
+        self.players = {}  # <playerid, (address,symbol)>, players[game_id] = {} would be another way to manage concurrently
+        self.is_turn = False
+        self.symbol = None
+        self.winner_id = None
+        self.waiting_for_move = None
         # =====
         self.serve()
 
@@ -126,13 +110,14 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
 
     def accept_user_input(self):
         while True:
-            break # TODO uncomment
-            user_input = input().replace(' ', '').lower()
+            user_input = input("Enter a command: ").replace(' ', '').lower()
             if match := re.match('^set-symbol([0-9]),([xo])$', user_input):
                 position, marker = match.groups()
-                # TODO
+                self.send_move(int(position), marker)
             elif re.match('^list-board$', user_input):
-                pass  # TODO
+                self.list_board()
+            elif re.match('^join$', user_input):
+                self.join_game()
             elif match := re.match('^set-node-time' + 'node-\d+' + '(\d\d):(\d\d):(\d\d)$', user_input):
                 hh, mm, ss = match.groups()
                 # TODO
@@ -142,6 +127,9 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
             elif match := re.match('^set-time-out' + 'game-master(\d+)$', user_input):
                 timout = match.group(1)
                 # TODO
+            elif match := re.match('^debug$', user_input):
+                import pprint as pp
+                pp.pprint(self.__dict__)
             else:
                 print("Accepted commands are:\n"
                       "List-board\n"
@@ -150,6 +138,7 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
                       "Set-time-out players <time minutes>\n"
                       "Set-time-out gamer-master <time minutes>\n"
                       )
+
     def cluster_nodes(self):
         """Returns all nodes registered in the cluster as a tuple containing the node id and the address"""
         for address, meta in self.etcd.get_prefix("/nodes/"):
@@ -249,25 +238,22 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
     def generate_unique_node_id(self):
         return random.randint(0, 10000)
 
-    # def players(self):
-    #     """Gets the players in the game from etcd"""
-    #     players_by_symbol = {}
-    #     for value, k in self.etcd.get_prefix("/players/"):
-    #         _, _, symbol, player_id = k.key.decode().split("/")
-    #         players_by_symbol.setdefault(symbol, {})[player_id] = value
-    #
-    #     return players_by_symbol
-
-    # def game_started(self):
-    #     """Checks if game has started"""
-    #     response = self.etcd.get("/game_started")[0]
-    #     if response is None:
-    #         return False
-    #     return self.etcd.get("/game_started")[0].decode() == "True"
+    def join_game(self):
+        """Requests to join game"""
+        with grpc.insecure_channel(self.leader_address) as channel:
+            stub = protocol_pb2_grpc.GameServiceStub(channel)
+            request = protocol_pb2.JoinGameRequest(request_id=self.node_id)
+            response = stub.JoinGame(request, timeout=self.timeout)
+            if response.status != 1:
+                return False
+            self.symbol = "O" if response.marker == 1 else "X"
+            print(f"Joined game as {self.symbol} player")
+            return True
 
     def JoinGame(self, request, context):
 
         symbol = None
+        cluster = None
         # leader cannot join game
         if request.request_id == self.leader_id:
             context.abort(grpc.StatusCode.UNAVAILABLE, "Leader cannot join game")
@@ -280,52 +266,124 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
         elif self.players[request.request_id]:
             context.abort(grpc.StatusCode.ALREADY_EXISTS, f"Player already in game: {self.players}")
 
+        print(f"Player joined: {self.players} (symbol: {symbol}), address: {cluster[request.request_id]}")
+
         return protocol_pb2.JoinGameResponse(status=1, marker=symbol)
+
+    def request_player_to_move(self, player_id):
+        """Requests player to make a move"""
+        player_address, symbol = self.players[player_id]
+        with grpc.insecure_channel(player_address) as channel:
+            stub = protocol_pb2_grpc.GameServiceStub(channel)
+            response = stub.PlayerTurn(
+                protocol_pb2.PlayerTurnRequest(request_id=self.node_id, board_state=str(self.game.get_board()),
+                                               marker=symbol), timeout=self.timeout)
+            if response.status == 1:
+                print(response.message)
+                self.waiting_for_move = True
+                return True
 
     def PlayerTurn(self, request, context):
         """Sets player turn to be able to place marker"""
         # only leader can set player turn
         if request.request_id != self.leader_id:
             context.abort(grpc.StatusCode.UNAVAILABLE, "Only leader can set player turn")
-        # game must be started
-        if not self.game_started():
-            context.abort(grpc.StatusCode.UNAVAILABLE, "Game not started")
-        # player turn must be valid
-        symbol = request.marker
-        print(f"Player turn {symbol}.")
-        current_player = self.players()[symbol]
-        self.player = current_player
+        symbol = "O" if request.marker == 1 else "X"
+        # print(f"Player turn {symbol}.")
+        self.is_turn = True
 
-        print(f"Player {self.player} turn")
-        return protocol_pb2.Acknowledged()
+        return protocol_pb2.PlayerTurnResponse(status=1, message=f"Player {symbol} turn set; {str(request.board_state)}")
 
     def ListBoard(self, request, context):
         """Lists the board"""
         # game must be started
-        if not self.game_started():
-            context.abort(grpc.StatusCode.UNAVAILABLE, "Game not started")
-        return protocol_pb2.ListBoardResponse(status=1, message=f"Board: {str(self.game.board)}", board=self.game.board)
+        return protocol_pb2.ListBoardResponse(status=1, message=f"Board: {self.game.get_board()}",
+                                              board=self.game.get_board())
+
+    def list_board(self):
+        """Lists the board"""
+        with grpc.insecure_channel(self.leader_address) as channel:
+            stub = protocol_pb2_grpc.GameServiceStub(channel)
+            response = stub.ListBoard(protocol_pb2.ListBoardRequest(), timeout=self.timeout)
+            if response.status != 1:
+                return None
+            print(response.message)
+            return response.board
+
+    def send_move(self, board_position, marker):
+        """Sends move to leader"""
+        leader_address = self.leader_address
+        if marker.upper() != self.symbol:
+            print("Wrong marker")
+        with grpc.insecure_channel(leader_address) as channel:
+            stub = protocol_pb2_grpc.GameServiceStub(channel)
+            response = stub.PlaceMarker(
+                protocol_pb2.PlaceMarkerRequest(request_id=self.node_id, board_position=board_position,
+                                                marker=self.symbol), timeout=self.timeout)
+            if response.status == 1:
+                self.is_turn = False
+                print(response.message)
+                return True
+
+    def declare_winner(self):
+        """Announces winner to all players"""
+        self.winner_id = [player_id for player_id, player in self.players.items() if player[1] == self.game.winner][0]
+        for player_id, player in self.players.items():
+            player_address, symbol = player
+            with grpc.insecure_channel(player_address) as channel:
+                stub = protocol_pb2_grpc.GameServiceStub(channel)
+                stub.DeclareWinner(protocol_pb2.DeclareWinnerRequest(winner_id=self.winner_id), timeout=self.timeout)
+
+    def DeclareWinner(self, request, context):
+        """Announces winner"""
+        print(f"Game over. Winner: {request.winner_id}")
+        if request.winner_id == self.node_id:
+            print("=============WINNER!==============")
+        return protocol_pb2.Acknowledged()
 
     def PlaceMarker(self, request, context):
-        if not self.game_started():
-            context.abort(grpc.StatusCode.UNAVAILABLE, "Game not started")
         if self.game_over:
             context.abort(grpc.StatusCode.UNAVAILABLE, "Game over")
-
-        players = self.players()
-        print(players)
-        symbol = next((k for k, v in players.items() if str(request.request_id) in v), None)
-
-        game_turn = self.game.players[self.game.turn % 2]
-
-        if symbol != game_turn:
-            print(f"Invalid player {symbol} != {game_turn}")
-            return context.abort(grpc.StatusCode.INVALID_ARGUMENT, "Invalid player")
-        if not self.game.move(symbol, request.board_position):
+        if not self.game.move(request.marker, request.board_position):
             return context.abort(grpc.StatusCode.INVALID_ARGUMENT, "Invalid move")
         self.game_over = self.game.winner is not None
-        return protocol_pb2.PlaceMarkerResponse(status=1, message=f"Player {self.player} placed marker at {request.board_position}, board: {self.game.board}")
+        self.waiting_for_move = False
+        return (
+            protocol_pb2.PlaceMarkerResponse(
+                status=1, message=f"Player {self.player} won!"
+            )
+            if self.game_over
+            else protocol_pb2.PlaceMarkerResponse(
+                status=1,
+                message=f"Player {self.player} placed marker at {request.board_position}, board: {self.game.get_board()}",
+            )
+        )
 
+
+def main_leader(node):
+    """Main function for leader"""
+    # wait for 2 players to join
+    while len(node.players) < 2:
+        time.sleep(1)
+    print("Game started")
+    while not node.game_over:
+        while not node.waiting_for_move:
+            print("Waiting for move")
+            player_symbol = node.game.get_player_turn()
+            player_id = [player_id for player_id, player in node.players.items() if player[1] == player_symbol][0]
+            print(f"Sending request to player {player_id}, {player_symbol}")
+            node.request_player_to_move(player_id)
+            time.sleep(10)
+
+    # announce winner
+    node.declare_winner()
+    print("Game over")
+
+
+def main_client(node):
+    """Main function for client"""
+    while True:
+        node.accept_user_input()
 
 
 def main():
@@ -336,34 +394,20 @@ def main():
     etcd_host, etcd_port = "localhost", 2379
 
     node = Node(node_port, etcd_host, etcd_port)
-    # node.wait_for_termination()
 
-    while True:
-        try:
-            # initiate_request(node, "localhost:50051", "join")
-            game_started = node.game_started()
-            request = input("Enter command: ")
-            if node.leader_id != node.node_id and node.leader_id is not None and not game_started and request == "join":
-                response = initiate_request(node, node.leader_address, request)
-                node.symbol = "O" if response.marker == 1 else "X"
-                print(f"Player is: {node.symbol}")
-            elif node.leader_id == node.node_id and game_started and request == "turn":
-                current_player = node.players()[node.game.get_player_turn()]
-                print(f"Current player: {current_player}, initiating turn request")
-                response = initiate_request(node, current_player, request)
-                print(f"Response: {response}")
-            elif game_started and request == "place":
-                response = initiate_request(node, node.leader_address, request)
-                print(f"Response: {response}")
-            elif request == "list":
-                import pprint as pp
-                pp.pprint(node.__dict__)
-            elif request == "board":
-                print(initiate_request(node, node.leader_address, request))
-            time.sleep(2)
-        except Exception as e:
-            print(f"Exception occurred: {e}")
-            time.sleep(1)
+    time.sleep(1)
+
+    # start leader thread
+    if node.leader_id == node.node_id:
+        print("initiating leader thread")
+        leader_thread = threading.Thread(target=main_leader, args=(node,))
+        leader_thread.start()
+    else:
+        print("initiating client thread")
+        client_thread = threading.Thread(target=main_client, args=(node,))
+        client_thread.start()
+
+    node.wait_for_termination()
 
 
 if __name__ == '__main__':
