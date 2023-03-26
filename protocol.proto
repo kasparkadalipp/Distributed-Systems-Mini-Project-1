@@ -115,7 +115,7 @@ message PlaceMarkerRequest {
 
 message PlaceMarkerResponse {
   // request will result in failure in case issued by non-leader node
-  string status = 1;
+  Status status = 1;
   string message = 2;
 }
 
