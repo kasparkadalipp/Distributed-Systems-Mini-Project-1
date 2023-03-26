@@ -57,12 +57,11 @@ class Game:
     def convert_board(self, board):
 
         self.board = board
-
-        return f""" {self.board[0]}|{self.board[1]}|{self.board[2]}
-                    -----
-                    {self.board[3]}|{self.board[4]}|{self.board[5]}
-                    -----
-                    {self.board[6]}|{self.board[7]}|{self.board[8]}"""
+        print((" {} | {} | {}\n"
+               "---+---+---\n"
+               " {} | {} | {}\n"
+               "---+---+---\n"
+               " {} | {} | {}").format(*self.board))
 
     def move(self, player, position):
 
