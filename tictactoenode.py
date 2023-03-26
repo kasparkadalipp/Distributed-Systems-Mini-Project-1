@@ -6,6 +6,7 @@ import concurrent
 import time
 import grpc
 import etcd3
+from google.protobuf.timestamp_pb2 import Timestamp
 import protocol_pb2
 import protocol_pb2_grpc
 
@@ -16,15 +17,17 @@ def get_host_ip():
     hostname = socket.gethostname()
     return socket.gethostbyname(hostname)
 
+
 class Node(protocol_pb2_grpc.GameServiceServicer):
     def __init__(self, node_port, etcd_host, etcd_port):
-        self.timeout = 1  # timeout used for RPC calls in seconds
+        self.timeout = 10  # timeout used for RPC calls in seconds
         self.leader_id = None
         self.node_id = self.generate_unique_node_id()
         self.port = node_port
         self.address = f"{get_host_ip()}:{self.port}"
         self.etcd = etcd3.client(host=etcd_host, port=etcd_port)
         self.serve()
+        self.time_offset = 0  # offset of clock in milliseconds
 
         print(f"Starting node '{self.node_id}', listening on '{self.address}'")
 
@@ -45,7 +48,7 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
                 self.election()
             if self.node_id == self.leader_id:
                 self.time_sync()
-            time.sleep(1)
+            time.sleep(self.timeout)
 
     def register(self):
         """Registers node within etcd so it is discoverable for other nodes"""
@@ -59,7 +62,7 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
         with grpc.insecure_channel(nodes[self.leader_id]) as channel:
             stub = protocol_pb2_grpc.GameServiceStub(channel)
             try:
-                stub.Echo(protocol_pb2.Ping(),timeout=self.timeout)
+                stub.Echo(protocol_pb2.Ping(), timeout=self.timeout)
                 return True
             except Exception:
                 return False
@@ -89,12 +92,12 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
             # Either all nodes with lower node id have failed or have acknowledged us as leader, we can broadcasting us as new leader
             request = protocol_pb2.NewLeader(leader_id=self.node_id)
             futures = []
-            for (_, channel) in channels.items():
+            for channel in channels.values():
                 stub = protocol_pb2_grpc.GameServiceStub(channel)
                 futures.append(executor.submit(
                     stub.NotifyOfNewLeader, request))
             concurrent.futures.wait(futures, timeout=self.timeout)
-        for (_, channel) in channels.items():
+        for channel in channels.values():
             channel.close()
 
     def Echo(self, request, context):
@@ -104,7 +107,7 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
         if request.node_id > self.node_id:
             # Request originated from node with higher id, we might be able to assume leader role ourselves.
             self.election()
-        return protocol_pb2.LeaderResponse(acknowledged=request.node_id < self.node_id)
+        return protocol_pb2.LeaderResponse(acknowledged=request.node_id <= self.node_id)
 
     def NotifyOfNewLeader(self, request, context):
         if self.leader_id != request.leader_id:
@@ -112,8 +115,49 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
             self.leader_id = request.leader_id
         return protocol_pb2.Acknowledged()
 
+    def GetTime(self, request, context):
+        time = Timestamp()
+        time.FromMilliseconds(time.ToMilliseconds() + self.time_offset)
+        return protocol_pb2.TimeResponse(time=time)
+
+    def AdjustClock(self, request, context):
+        self.time_offset += request.offset_ms
+        return protocol_pb2.AdjustClockResponse()
+
+    def SetClock(self, request, context):
+        self.time_offset = request.time.ToMilliseconds() - cur_time.ToMilliseconds()
+        return protocol_pb2.SetClockResponse()
+
     def time_sync(self):
-        pass  # FIXME: To be implemented
+        print("Starting time synchronization")
+        channels = {node_id: grpc.insecure_channel(address) for (
+            node_id, address) in self.cluster_nodes()}
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(channels)) as executor:
+            request = protocol_pb2.TimeRequest()
+            futures = {}
+            for (node_id, channel) in channels.items():
+                stub = protocol_pb2_grpc.GameServiceStub(channel)
+                futures[node_id] = executor.submit(stub.GetTime, request)
+            times = {}
+            for (node_id, future) in futures.items():
+                try:
+                    times[node_id] = future.result(
+                        timeout=self.timeout).time.ToMilliseconds()
+                except Exception:
+                    pass
+            avg_time = sum(times.values())/len(times.values())
+            futures = []
+            for (node_id, node_time) in times.items():
+                stub = protocol_pb2_grpc.GameServiceStub(channels[node_id])
+                offset = int(avg_time - node_time)
+                if not offset:
+                    continue
+                print(f"Adjusting time offset of node {node_id} by {offset}")
+                request = protocol_pb2.AdjustClockRequest(offset_ms=offset)
+                futures.append(executor.submit(stub.AdjustClock, request))
+            concurrent.futures.wait(futures, timeout=self.timeout)
+        for channel in channels.values():
+            channel.close()
 
     def serve(self):
         self.server = grpc.server(
