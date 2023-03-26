@@ -111,6 +111,7 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
         self.game_over = False
         self.leader = False
         self.player = None
+        self.players = {} # <playerid, (address,symbol)>, players[game_id] = {} would be another way to manage concurrently
         # =====
         self.serve()
 
@@ -219,22 +220,21 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
     def generate_unique_node_id(self):
         return random.randint(0, 10000)
 
+    # def players(self):
+    #     """Gets the players in the game from etcd"""
+    #     players_by_symbol = {}
+    #     for value, k in self.etcd.get_prefix("/players/"):
+    #         _, _, symbol, player_id = k.key.decode().split("/")
+    #         players_by_symbol.setdefault(symbol, {})[player_id] = value
+    #
+    #     return players_by_symbol
 
-    def players(self):
-        """Gets the players in the game from etcd"""
-        players_by_symbol = {}
-        for value, k in self.etcd.get_prefix("/players/"):
-            _, _, symbol, player_id = k.key.decode().split("/")
-            players_by_symbol.setdefault(symbol, {})[player_id] = value
-
-        return players_by_symbol
-
-    def game_started(self):
-        """Checks if game has started"""
-        response = self.etcd.get("/game_started")[0]
-        if response is None:
-            return False
-        return self.etcd.get("/game_started")[0].decode() == "True"
+    # def game_started(self):
+    #     """Checks if game has started"""
+    #     response = self.etcd.get("/game_started")[0]
+    #     if response is None:
+    #         return False
+    #     return self.etcd.get("/game_started")[0].decode() == "True"
 
     def JoinGame(self, request, context):
 
@@ -243,25 +243,15 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
         if request.request_id == self.leader_id:
             context.abort(grpc.StatusCode.UNAVAILABLE, "Leader cannot join game")
 
-        # register player in etcd
-        players = self.players()
+        if request.request_id not in self.players:
+            cluster = dict(self.cluster_nodes())
+            symbol = "X" if len(self.players) == 1 else "O"
+            self.players[request.request_id] = (cluster[request.request_id], symbol)
 
-        if request.request_id in players:
-            context.abort(grpc.StatusCode.ALREADY_EXISTS, f"Player already exists {players}")
+        elif self.players[request.request_id]:
+            context.abort(grpc.StatusCode.ALREADY_EXISTS, f"Player already in game: {self.players}")
 
-        if len(players) < 2:
-            symbol = "O" if players else "X"
-            self.etcd.put(f"/players/{symbol}/{request.request_id}", self.address)
-            players = list(self.players())
-
-        if len(players) == 2:
-            self.etcd.put("/game_started", "True")
-
-        game_started = self.game_started()
-
-        print(f"Player {request.request_id} joined game with symbol {symbol}, game started: {game_started}")
-
-        return protocol_pb2.JoinGameResponse(game_started=game_started, marker=symbol)
+        return protocol_pb2.JoinGameResponse(status=1, marker=symbol)
 
     def PlayerTurn(self, request, context):
         """Sets player turn to be able to place marker"""
