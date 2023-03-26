@@ -46,7 +46,7 @@ service GameService {
   // - Master needs to inform slaves once it is their turn (board state should be included, including for what player the turn needs to be made for)
   rpc JoinGame (JoinGameRequest) returns (JoinGameResponse);
   rpc ListBoard (ListBoardRequest) returns (ListBoardResponse);
-  rpc PlayerTurn (RequestTurn) returns (Acknowledged);
+  rpc PlayerTurn (PlayerTurnRequest) returns (Acknowledged);
   rpc PlaceMarker (PlaceMarkerRequest) returns (PlaceMarkerResponse); // place X or O
   rpc DeclareWinner (AnnounceWinner) returns (Acknowledged);
 }
@@ -107,29 +107,34 @@ message AnnounceWinner {
   bool is_winner = 2;
 }
 
+message PlaceMarkerRequest {
+  int32 request_id = 1;
+  int32 board_position = 2;
+  Marker marker = 3;
+}
+
 message PlaceMarkerResponse {
   // request will result in failure in case issued by non-leader node
-  Status status = 1;
+  string status = 1;
   string message = 2;
 }
 
-message RequestTurn {
-  string board_state = 1;
-  Marker marker = 2;
+message PlayerTurnRequest {
+  int32 request_id = 1;
+  string board_state = 2;
+  Marker marker = 3;
 }
 
-message PlaceMarkerRequest {
-  int32 player_id = 1;
-  int32 board_position = 2;
-}
+
 
 
 message JoinGameRequest {
-  int32 player_id = 1;
+  int32 request_id = 1;
 }
 
 message JoinGameResponse {
   bool game_started = 1;
+  Marker marker = 2;
 }
 
 message ListBoardRequest {
@@ -142,4 +147,8 @@ message ListBoardResponse {
 
   // maps field identifier (number between 0 and 8) to player that occupies field (if any)
   map<uint32, Marker> board = 3;
+}
+
+message Denied {
+  string message = 1;
 }
