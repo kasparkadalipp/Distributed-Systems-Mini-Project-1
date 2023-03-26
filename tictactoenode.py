@@ -5,6 +5,7 @@ import threading
 import concurrent
 import time
 import grpc
+import re
 import etcd3
 import protocol_pb2
 import protocol_pb2_grpc
@@ -42,7 +43,35 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
         # Start thread for background tasks (leader election / time synchronization)
         self.daemon = threading.Thread(target=self.background_task)
         self.daemon.start()
+        self.commands = threading.Thread(target=self.accept_user_input)
+        self.commands.start()
 
+    def accept_user_input(self):
+        while True:
+            break # TODO uncomment
+            user_input = input().replace(' ', '').lower()
+            if match := re.match('^set-symbol([0-9]),([xo])$', user_input):
+                position, marker = match.groups()
+                # TODO
+            elif re.match('^list-board$', user_input):
+                pass  # TODO
+            elif match := re.match('^set-node-time' + 'node-\d+' + '(\d\d):(\d\d):(\d\d)$', user_input):
+                hh, mm, ss = match.groups()
+                # TODO
+            elif match := re.match('^set-time-out' + 'players(\d+)$', user_input):
+                timout = match.group(1)
+                # TODO
+            elif match := re.match('^set-time-out' + 'game-master(\d+)$', user_input):
+                timout = match.group(1)
+                # TODO
+            else:
+                print("Accepted commands are:\n"
+                      "List-board\n"
+                      "Set-symbol <position 0-9>, <marker X or O>\n"
+                      "Set-node-time Node-<node-id> <hh:mm:ss>\n"
+                      "Set-time-out players <time minutes>\n"
+                      "Set-time-out gamer-master <time minutes>\n"
+                      )
     def cluster_nodes(self):
         """Returns all nodes registered in the cluster as a tuple containing the node id and the address"""
         for address, meta in self.etcd.get_prefix("/nodes/"):
