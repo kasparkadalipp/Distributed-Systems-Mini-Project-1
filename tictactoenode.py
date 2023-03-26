@@ -1,6 +1,5 @@
 import socket
 import sys
-import random
 import threading
 import concurrent
 import time
@@ -22,10 +21,10 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
     def __init__(self, node_port, etcd_host, etcd_port):
         self.timeout = 10  # timeout used for RPC calls in seconds
         self.leader_id = None
-        self.node_id = self.generate_unique_node_id()
         self.port = node_port
         self.address = f"{get_host_ip()}:{self.port}"
         self.etcd = etcd3.client(host=etcd_host, port=etcd_port)
+        self.node_id = self.generate_unique_node_id()
         self.serve()
         self.time_offset = 0  # offset of clock in milliseconds
 
@@ -169,10 +168,19 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
     def wait_for_termination(self):
         self.server.wait_for_termination()
 
-    # TODO: Check if we can somehow get an monotonically incrementing atomic(!) counter from etcd?
-    # Or should we use (unsynchronized) UNIX milliseconds since epoch at startup to generate our id?
     def generate_unique_node_id(self):
-        return random.randint(0, 10000)
+        # initialize counter variable if it does not already exist
+        self.etcd.transaction(
+            compare=[etcd3.transactions.Version('/node_counter') == 0],
+            success=[etcd3.transactions.Put('/node_counter', '0')],
+            failure=[]
+        )
+        # atomically get and increment variable
+        increment_successful = False
+        while not increment_successful:
+            counter = int(self.etcd.get('/node_counter')[0])
+            increment_successful = self.etcd.replace('/node_counter', str(counter), str(counter+1))
+        return counter
 
 
 def main():
