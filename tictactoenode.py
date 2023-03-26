@@ -57,6 +57,28 @@ class Game:
             return True
         else:
             return False
+    def isInvalidMove(self, position, marker):
+            count_x = self.board.count("X")
+            count_o = self.board.count("O")
+            if position < 0 or position > 9:
+                return False
+            if marker == "X" and count_x - count_o == 1:
+                return False
+            if marker == "O" and count_o - count_x == 1:
+                return False
+            if self.board[position] != " ":
+                return False
+            return True
+
+    def move(self, marker, position):
+        if self.isInvalidMove(position, marker):
+            return False
+
+        self.board[position] = marker
+        self.move_list[position] = (marker, datetime.datetime.now())
+        self.turn += 1
+        self.check_winner()
+        return True
 
     def check_winner(self):
         winning_combination = [
