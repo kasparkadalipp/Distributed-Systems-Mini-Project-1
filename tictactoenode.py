@@ -9,6 +9,7 @@ import etcd3
 import protocol_pb2
 import protocol_pb2_grpc
 from concurrent import futures
+import datetime
 
 
 # Hackish way to get the address to bind to.
@@ -18,6 +19,82 @@ def get_host_ip():
     hostname = socket.gethostname()
     return socket.gethostbyname(hostname)
 
+def initiate_request(from_node, to_node_address, action, extra_args=None):
+    print(f"Initiating {action} request from {from_node.node_id} to {to_node_address}")
+    with grpc.insecure_channel(to_node_address) as channel:
+        stub = protocol_pb2_grpc.GameServiceStub(channel)
+        if action == "join":
+            response = stub.JoinGame(protocol_pb2.JoinGameRequest(request_id=from_node.node_id))
+        elif action == "place":
+            extra_args = {}
+            position = input("Enter position: ")
+            extra_args["board_position"] = int(position)
+            response = stub.PlaceMarker(protocol_pb2.PlaceMarkerRequest(request_id=from_node.node_id, board_position=extra_args["board_position"]))
+        elif action == "turn":
+            response = stub.PlayerTurn(protocol_pb2.PlayerTurnRequest(request_id=from_node.node_id, board_state=from_node.game.board, marker=from_node.game.players[from_node.game.turn % 2]))
+        elif action == "board":
+            response = stub.ListBoard(protocol_pb2.ListBoardRequest())
+        elif action == "list":
+            # print all attributes of node
+            print(from_node.__dict__)
+        else:
+            print("Invalid action")
+        return response
+
+
+class Game:
+
+    def __init__(self):
+        self.board = [" " for _ in range(9)]
+        self.board_map = {}
+        self.turn = 0
+        self.winner = None
+        self.winning_combination = None
+        self.players = ["O", "X"]
+        self.move_list = {}
+
+    def convert_board(self, board):
+
+        self.board = board
+
+        return f""" {self.board[0]}|{self.board[1]}|{self.board[2]}
+                    -----
+                    {self.board[3]}|{self.board[4]}|{self.board[5]}
+                    -----
+                    {self.board[6]}|{self.board[7]}|{self.board[8]}"""
+
+    def move(self, player, position):
+
+        if self.board[position] == " ":
+            self.board[position] = player
+            self.move_list[position] = (player, datetime.datetime.now())
+            self.turn += 1
+            self.check_winner()
+            return True
+        else:
+            return False
+
+    def check_winner(self):
+        winning_combination = [
+            [0, 1, 2], [3, 4, 5], [6, 7, 8],
+            [0, 3, 6], [1, 4, 7], [2, 5, 8],
+            [0, 4, 8], [2, 4, 6]
+        ]
+        for combination in winning_combination:
+            if self.board[combination[0]] == self.board[combination[1]] == self.board[combination[2]] != " ":
+                self.winner = self.board[combination[0]]
+                self.winning_combination = combination
+                return True
+        if self.turn == 9:
+            self.winner = "Draw"
+            return True
+        return False
+
+    def get_player_turn(self):
+        return self.players[self.turn % 2] if self.turn < 9 else None
+
+    def get_board(self):
+        return self.board
 
 class Node(protocol_pb2_grpc.GameServiceServicer):
     def __init__(self, node_port, etcd_host, etcd_port):
@@ -152,24 +229,12 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
 
         return players_by_symbol
 
-
-
-    def get_from_etcd(self, pref):
-        """Gets the value from etcd"""
-        d = {}
-        for value, k in self.etcd.get_prefix(pref):
-            keys = k.key.decode().split("/")
-            for i in range(len(keys)):
-                d[keys[i]] = value
-        return d
-
     def game_started(self):
         """Checks if game has started"""
         response = self.etcd.get("/game_started")[0]
         if response is None:
             return False
         return self.etcd.get("/game_started")[0].decode() == "True"
-
 
     def JoinGame(self, request, context):
 
@@ -240,7 +305,8 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
         if not self.game.move(symbol, request.board_position):
             return context.abort(grpc.StatusCode.INVALID_ARGUMENT, "Invalid move")
         self.game_over = self.game.winner is not None
-        return protocol_pb2.PlaceMarkerResponse(status="OK", message=f"Player {self.player} placed marker at {request.board_position}, board: {self.game.board}")
+        return protocol_pb2.PlaceMarkerResponse(status=1, message=f"Player {self.player} placed marker at {request.board_position}, board: {self.game.board}")
+
 
 
 def main():
@@ -279,85 +345,6 @@ def main():
         except Exception as e:
             print(f"Exception occurred: {e}")
             time.sleep(1)
-
-
-def initiate_request(from_node, to_node_address, action, extra_args=None):
-    print(f"Initiating {action} request from {from_node.node_id} to {to_node_address}")
-    with grpc.insecure_channel(to_node_address) as channel:
-        stub = protocol_pb2_grpc.GameServiceStub(channel)
-        if action == "join":
-            response = stub.JoinGame(protocol_pb2.JoinGameRequest(request_id=from_node.node_id))
-        elif action == "place":
-            extra_args = {}
-            position = input("Enter position: ")
-            extra_args["board_position"] = int(position)
-            response = stub.PlaceMarker(protocol_pb2.PlaceMarkerRequest(request_id=from_node.node_id, board_position=extra_args["board_position"]))
-        elif action == "turn":
-            response = stub.PlayerTurn(protocol_pb2.PlayerTurnRequest(request_id=from_node.node_id, board_state=from_node.game.board, marker=from_node.game.players[from_node.game.turn % 2]))
-        elif action == "board":
-            response = stub.ListBoard(protocol_pb2.ListBoardRequest())
-        elif action == "list":
-            # print all attributes of node
-            print(from_node.__dict__)
-        else:
-            print("Invalid action")
-        return response
-
-import datetime
-
-class Game:
-
-    def __init__(self):
-        self.board = [" " for _ in range(9)]
-        self.board_map = {}
-        self.turn = 0
-        self.winner = None
-        self.winning_combination = None
-        self.players = ["O", "X"]
-        self.move_list = {}
-
-    def convert_board(self, board):
-
-        self.board = board
-
-        return f""" {self.board[0]}|{self.board[1]}|{self.board[2]}
-                    -----
-                    {self.board[3]}|{self.board[4]}|{self.board[5]}
-                    -----
-                    {self.board[6]}|{self.board[7]}|{self.board[8]}"""
-
-    def move(self, player, position):
-
-        if self.board[position] == " ":
-            self.board[position] = player
-            self.move_list[position] = (player, datetime.datetime.now())
-            self.turn += 1
-            self.check_winner()
-            return True
-        else:
-            return False
-
-    def check_winner(self):
-        winning_combination = [
-            [0, 1, 2], [3, 4, 5], [6, 7, 8],
-            [0, 3, 6], [1, 4, 7], [2, 5, 8],
-            [0, 4, 8], [2, 4, 6]
-        ]
-        for combination in winning_combination:
-            if self.board[combination[0]] == self.board[combination[1]] == self.board[combination[2]] != " ":
-                self.winner = self.board[combination[0]]
-                self.winning_combination = combination
-                return True
-        if self.turn == 9:
-            self.winner = "Draw"
-            return True
-        return False
-
-    def get_player_turn(self):
-        return self.players[self.turn % 2] if self.turn < 9 else None
-
-    def get_board(self):
-        return self.board
 
 
 if __name__ == '__main__':
