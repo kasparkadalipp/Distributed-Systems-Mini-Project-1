@@ -125,15 +125,12 @@ message PlayerTurnRequest {
   Marker marker = 3;
 }
 
-
-
-
 message JoinGameRequest {
   int32 request_id = 1;
 }
 
 message JoinGameResponse {
-  bool game_started = 1;
+  Status status = 1;
   Marker marker = 2;
 }
 
@@ -147,8 +144,4 @@ message ListBoardResponse {
 
   // maps field identifier (number between 0 and 8) to player that occupies field (if any)
   map<uint32, Marker> board = 3;
-}
-
-message Denied {
-  string message = 1;
 }
