@@ -63,16 +63,29 @@ class Game:
                "---+---+---\n"
                " {} | {} | {}").format(*self.board))
 
-    def move(self, player, position):
-
-        if self.board[position] == " ":
-            self.board[position] = player
-            self.move_list[position] = (player, datetime.datetime.now())
-            self.turn += 1
-            self.check_winner()
-            return True
-        else:
+    def isInvalidMove(self, position, marker):
+        count_x = self.board.count("X")
+        count_o = self.board.count("O")
+        if position < 0 or position > 9:
             return False
+        if marker == "X" and count_x - count_o == 1:
+            return False
+        if marker == "O" and count_o - count_x == 1:
+            return False
+        if self.board[position] != " ":
+            return False
+        return True
+
+    def move(self, marker, position):
+        if self.isInvalidMove(position, marker):
+            return False
+
+        self.board[position] = marker
+        self.move_list[position] = (marker, datetime.datetime.now())
+        self.turn += 1
+        self.check_winner()
+        return True
+
 
     def check_winner(self):
         winning_combination = [
@@ -125,7 +138,7 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
 
     def accept_user_input(self):
         while True:
-            break # TODO uncomment
+            break # TODO remove
             user_input = input().replace(' ', '').lower()
             if match := re.match('^set-symbol([0-9]),([xo])$', user_input):
                 position, marker = match.groups()
