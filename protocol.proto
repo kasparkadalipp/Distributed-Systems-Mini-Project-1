@@ -112,7 +112,7 @@ message PlaceMarkerResponse {
 
 message PlayerTurnRequest {
   int32 request_id = 1;
-  string board_state = 2;
+  repeated string board_state = 2;
   string marker = 3;
 }
 
