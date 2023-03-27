@@ -1,12 +1,12 @@
 import socket
 import sys
-import random
 import threading
 import concurrent
 import time
 import grpc
 import re
 import etcd3
+from google.protobuf.timestamp_pb2 import Timestamp
 import protocol_pb2
 import protocol_pb2_grpc
 from concurrent import futures
@@ -104,11 +104,11 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
         self.server = None
         self.timeout = 1  # timeout used for RPC calls in seconds
         self.leader_id = None
-        self.node_id = node_port  # self.generate_unique_node_id()
         self.port = node_port
         self.address = f"{get_host_ip()}:{self.port}"
         self.leader_address = None
         self.etcd = etcd3.client(host=etcd_host, port=etcd_port)
+        self.node_id = self.generate_unique_node_id()
         # =====
         self.game = Game()
         self.game_over = False
@@ -121,6 +121,7 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
         self.waiting_for_move = None
         # =====
         self.serve()
+        self.time_offset = 0  # offset of clock in milliseconds
 
         print(f"Starting node '{self.node_id}', listening on '{self.address}'")
 
@@ -174,7 +175,7 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
                 self.election()
             if self.node_id == self.leader_id:
                 self.time_sync()
-            time.sleep(1)
+            time.sleep(self.timeout)
 
     def register(self):
         """Registers node within etcd so it is discoverable for other nodes"""
@@ -233,7 +234,7 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
         if request.node_id > self.node_id:
             # Request originated from node with higher id, we might be able to assume leader role ourselves.
             self.election()
-        return protocol_pb2.LeaderResponse(acknowledged=request.node_id < self.node_id)
+        return protocol_pb2.LeaderResponse(acknowledged=request.node_id <= self.node_id)
 
     def NotifyOfNewLeader(self, request, context):
         if self.leader_id != request.leader_id:
@@ -242,8 +243,49 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
             self.leader_address = dict(self.cluster_nodes())[self.leader_id]
         return protocol_pb2.Acknowledged()
 
+    def GetTime(self, request, context):
+        time = Timestamp()
+        time.FromMilliseconds(time.ToMilliseconds() + self.time_offset)
+        return protocol_pb2.TimeResponse(time=time)
+
+    def AdjustClock(self, request, context):
+        self.time_offset += request.offset_ms
+        return protocol_pb2.AdjustClockResponse()
+
+    def SetClock(self, request, context):
+        self.time_offset = request.time.ToMilliseconds() - cur_time.ToMilliseconds()
+        return protocol_pb2.SetClockResponse()
+
     def time_sync(self):
-        pass  # FIXME: To be implemented
+        print("Starting time synchronization")
+        channels = {node_id: grpc.insecure_channel(address) for (
+            node_id, address) in self.cluster_nodes()}
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(channels)) as executor:
+            request = protocol_pb2.TimeRequest()
+            futures = {}
+            for (node_id, channel) in channels.items():
+                stub = protocol_pb2_grpc.GameServiceStub(channel)
+                futures[node_id] = executor.submit(stub.GetTime, request)
+            times = {}
+            for (node_id, future) in futures.items():
+                try:
+                    times[node_id] = future.result(
+                        timeout=self.timeout).time.ToMilliseconds()
+                except Exception:
+                    pass
+            avg_time = sum(times.values())/len(times.values())
+            futures = []
+            for (node_id, node_time) in times.items():
+                stub = protocol_pb2_grpc.GameServiceStub(channels[node_id])
+                offset = int(avg_time - node_time)
+                if not offset:
+                    continue
+                print(f"Adjusting time offset of node {node_id} by {offset}")
+                request = protocol_pb2.AdjustClockRequest(offset_ms=offset)
+                futures.append(executor.submit(stub.AdjustClock, request))
+            concurrent.futures.wait(futures, timeout=self.timeout)
+        for channel in channels.values():
+            channel.close()
 
     def serve(self):
         self.server = grpc.server(
@@ -255,10 +297,19 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
     def wait_for_termination(self):
         self.server.wait_for_termination()
 
-    # TODO: Check if we can somehow get an monotonically incrementing atomic(!) counter from etcd?
-    # Or should we use (unsynchronized) UNIX milliseconds since epoch at startup to generate our id?
     def generate_unique_node_id(self):
-        return random.randint(0, 10000)
+        # initialize counter variable if it does not already exist
+        self.etcd.transaction(
+            compare=[etcd3.transactions.Version('/node_counter') == 0],
+            success=[etcd3.transactions.Put('/node_counter', '0')],
+            failure=[]
+        )
+        # atomically get and increment variable
+        increment_successful = False
+        while not increment_successful:
+            counter = int(self.etcd.get('/node_counter')[0])
+            increment_successful = self.etcd.replace('/node_counter', str(counter), str(counter+1))
+        return counter
 
     def join_game(self):
         """Requests to join game"""
@@ -409,11 +460,16 @@ def main_client(node):
 
 
 def main():
-    node_port = int(sys.argv[1])
-    etcd_host = 'localhost'
-    etcd_port = 2379
-
-    etcd_host, etcd_port = "localhost", 2379
+    match len(sys.argv):
+        case 2:
+            node_port = int(sys.argv[1])
+            etcd_host, etcd_port = "localhost", 2379
+        case 3:
+            node_port = int(sys.argv[1])
+            etcd_host, etcd_port = sys.argv[2].split(":", 1)
+            etcd_port = int(etcd_port)
+        case _:
+            sys.exit(f"Usage: {sys.argv[0]} node-port [etcd-host:etcd-port]")
 
     node = Node(node_port, etcd_host, etcd_port)
 

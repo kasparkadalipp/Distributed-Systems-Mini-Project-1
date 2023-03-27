@@ -55,8 +55,7 @@ service GameService {
 message TimeRequest {}
 
 message TimeResponse {
-  // unix timestamp (milliseconds since epoch)
-  google.protobuf.Timestamp unix_time_ms = 1;
+  google.protobuf.Timestamp time = 1;
 }
 
 message AdjustClockRequest {
@@ -73,8 +72,7 @@ message AdjustClockResponse {
 }
 
 message SetClockRequest {
-  // unix timestamp (milliseconds since epoch)
-  google.protobuf.Timestamp unix_time_ms = 1;
+  google.protobuf.Timestamp time = 1;
 }
 
 message SetClockResponse {
