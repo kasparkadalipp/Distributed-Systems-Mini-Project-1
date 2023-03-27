@@ -21,13 +21,15 @@ def get_host_ip():
     return socket.gethostbyname(hostname)
 
 
-def print_board(board: str):
+def print_board(board: str, timestamps=False):
+    board.split(",")
+    if timestamps:
+        board = [value.split(":")[0] for value in board]
     print((" {} | {} | {}\n"
            "---+---+---\n"
            " {} | {} | {}\n"
            "---+---+---\n"
-           " {} | {} | {}").format(*[_ for _ in board]))
-
+           " {} | {} | {}").format(*board))
 
 class Game:
 
