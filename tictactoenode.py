@@ -42,7 +42,7 @@ class Game:
     def get_board(self):
         return "".join(self.board)
 
-    def isInvalidMove(self, position, marker):
+    def isInvalidMove(self, position, marker, player_id):
         print(f"FVALUES {position}, {marker}")
         count_x = self.board.count("X")
         count_o = self.board.count("O")
@@ -55,14 +55,22 @@ class Game:
         if marker == "O" and count_o - count_x == 1:
             print("x SHOULD MOVE")
             return True
+        if self.players[self.turn % 2] != player_id:
+            print("NOT YOUR TURN")
+            return True
+        # not right symbol:
         if self.board[position] != " ":
             print("POSITION IS NOT EMPTY")
+            return True
+        marker_idx = 0 if marker == "O" else 1
+        if self.players[marker_idx] != player_id:
+            print("NOT YOUR SYMBOL")
             return True
         print("VALID MOVE")
         return False
 
-    def move(self, marker, position):
-        if self.isInvalidMove(position, marker):
+    def move(self, marker, position, player_id):
+        if self.isInvalidMove(position, marker, player_id):
             return False
 
         print(f"Player {marker} is moving to position {position}")
@@ -422,11 +430,11 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
     def PlaceMarker(self, request, context):
         player = request.request_id
         current_id, symbol = self.ongoing_games[request.request_id].get_player_turn()
-        if player != current_id:
-            return context.abort(grpc.StatusCode.INVALID_ARGUMENT, "Not your turn")
+        print(f"DEBUG: {player} {current_id} {symbol}")
+        # FIXME: check that the player is the one who's turn it is
         game = self.ongoing_games[request.request_id]
         opponent = None
-        if not game.move(request.marker, request.board_position):
+        if not game.move(request.marker, request.board_position, request.request_id):
             return context.abort(grpc.StatusCode.INVALID_ARGUMENT, "Invalid move")
 
         if game.winner:
