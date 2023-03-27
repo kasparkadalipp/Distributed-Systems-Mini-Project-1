@@ -42,18 +42,6 @@ class Game:
     def get_board(self):
         return "".join(self.board)
 
-    def move(self, player, position):
-        symbol = "O" if player == 0 else "X"
-        print(f"Player {symbol} is moving to position {position}")
-        if self.board[position] == " ":
-            self.board[position] = symbol
-            self.move_list[position] = (symbol, datetime.datetime.now())
-            self.turn += 1
-            self.check_winner()
-            return True
-        else:
-            return False
-
     def isInvalidMove(self, position, marker):
         count_x = self.board.count("X")
         count_o = self.board.count("O")
