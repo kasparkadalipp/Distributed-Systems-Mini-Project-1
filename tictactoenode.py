@@ -3,7 +3,6 @@ import sys
 import threading
 import concurrent
 import time
-import datetime
 import re
 import grpc
 import pprint as pp
@@ -87,7 +86,7 @@ class Game:
         print(f"Player {marker} is moving to position {position}")
 
         self.board[position] = marker
-        self.move_list[position] = (marker, datetime.datetime.now())
+        self.move_list[position] = (marker, datetime.now())
         self.turn += 1
         self.check_winner()
         return True
@@ -150,6 +149,8 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
                     self.list_board()
                 elif re.match('^join$', user_input):
                     self.join_game()
+                elif match := re.match(r'^get-node-time', user_input):
+                    print("Time on current node:", datetime.fromtimestamp(self.node_time()/1000))
                 elif match := re.match(r'^set-node-time' + r'node-(\d+)' + r'(\d\d):(\d\d):(\d\d)$', user_input):
                     node, hh, mm, ss = match.groups()
                     node = int(node)
@@ -162,7 +163,7 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
                         continue
                     with grpc.insecure_channel(nodes[node]) as channel:
                         stub = protocol_pb2_grpc.GameServiceStub(channel)
-                        dt = datetime.datetime.now().replace(hour=int(hh), minute=int(hh), second=int(ss))
+                        dt = datetime.now().astimezone().replace(hour=int(hh), minute=int(mm), second=int(ss))
                         time = Timestamp()
                         time.FromDatetime(dt)
                         request = protocol_pb2.SetClockRequest(time=time)
@@ -181,6 +182,7 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
                           "List-board\n"
                           "Set-symbol <position 0-9>, <marker X or O>\n"
                           "Set-node-time Node-<node-id> <hh:mm:ss>\n"
+                          "Get-node-time\n"
                           "Set-time-out players <time minutes>\n"
                           "Set-time-out gamer-master <time minutes>\n"
                           )
@@ -271,7 +273,7 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
 
     def node_time(self):
         """Local node time in milliseconds since epoch"""
-        return Timestamp().ToMilliseconds() + self.time_offset
+        return int(time.time()*1000) + self.time_offset
 
     def formatted_time(self):
         return datetime.fromtimestamp(self.node_time() / 1000).strftime('%HH:%MM:%SS')
@@ -286,8 +288,7 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
         return protocol_pb2.AdjustClockResponse()
 
     def SetClock(self, request, context):
-        cur_time = Timestamp()
-        self.time_offset = request.time.ToMilliseconds() - cur_time.ToMilliseconds()
+        self.time_offset = request.time.ToMilliseconds() - self.node_time()
         return protocol_pb2.SetClockResponse()
 
     def time_sync(self):
