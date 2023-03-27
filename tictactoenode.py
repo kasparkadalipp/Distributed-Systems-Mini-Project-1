@@ -20,12 +20,15 @@ def get_host_ip():
     hostname = socket.gethostname()
     return socket.gethostbyname(hostname)
 
-def print_board(board:str):
+
+def print_board(board: str):
     print((" {} | {} | {}\n"
-            "---+---+---\n"
-            " {} | {} | {}\n"
-            "---+---+---\n"
-            " {} | {} | {}").format(*[_ for _ in board]))
+           "---+---+---\n"
+           " {} | {} | {}\n"
+           "---+---+---\n"
+           " {} | {} | {}").format(*[_ for _ in board]))
+
+
 class Game:
 
     def __init__(self, player_x, player_o):
@@ -35,16 +38,19 @@ class Game:
         self.winner = None
         self.winning_combination = None
         self.players = [player_x, player_o]
+        self.markers = ["X", "O"]
         self.move_list = {}
 
     def get_board(self):
         return "".join(self.board)
 
+    def get_current_marker(self):
+        return self.markers[self.turn % 2]
+
     def get_current_player(self):
-        return self.players[(self.board.count("X") + self.board.count("O")) % 2]
+        return self.players[self.turn % 2]
 
     def isInvalidMove(self, position, marker, player_id):
-        print(f"FVALUES {position}, {marker}")
         count_x = self.board.count("X")
         count_o = self.board.count("O")
         if position < 0 or position > 8:
@@ -63,10 +69,10 @@ class Game:
         if self.board[position] != " ":
             print("POSITION IS NOT EMPTY")
             return True
-        # marker_idx = 0 if marker == "O" else 1
-        # if self.players[marker_idx] != player_id:
-        #     print("NOT YOUR SYMBOL")
-            return True
+            # marker_idx = 0 if marker == "O" else 1
+            # if self.players[marker_idx] != player_id:
+            #     print("NOT YOUR SYMBOL")
+            # return True
         print("VALID MOVE")
         return False
 
@@ -85,28 +91,27 @@ class Game:
         self.check_winner()
         return True
 
-
     def check_winner(self):
         winning_combination = [
             [0, 1, 2], [3, 4, 5], [6, 7, 8],
             [0, 3, 6], [1, 4, 7], [2, 5, 8],
             [0, 4, 8], [2, 4, 6]
         ]
-        for combination in winning_combination:
+        for combination in winning_combination: # FIXME both currently lose
             if self.board[combination[0]] == self.board[combination[1]] == self.board[combination[2]] != " ":
                 player_x, player_o = self.players
-                self.winner = [(player_x, "winner" if player_x == self.get_current_player else "loss"),
-                (player_o,  "winner" if player_x == self.get_current_player else "loss")]
+                self.winner = [(player_x, "win" if player_o == self.get_current_player() else "loss"),
+                               (player_o, "win" if player_x == self.get_current_player() else "loss")]
                 self.winning_combination = combination
                 return True
         if self.board_is_filled():
-            player_x, player_o  = self.players
-            self.winner = [(player_x, "draw"), (player_o,"draw")]
+            player_x, player_o = self.players
+            self.winner = [(player_x, "draw"), (player_o, "draw")]
             return True
         return False
 
     def get_player_turn(self):
-        return self.players[self.turn % 2], self.turn % 2 + 1
+        return self.players[self.turn % 2], self.markers[self.turn % 2]
 
 
 class Node(protocol_pb2_grpc.GameServiceServicer):
@@ -156,7 +161,7 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
                         continue
                     with grpc.insecure_channel(nodes[node]) as channel:
                         stub = protocol_pb2_grpc.GameServiceStub(channel)
-                        dt = datetime.datetime.now().replace(hour = int(hh), minute=int(hh), second=int(ss))
+                        dt = datetime.datetime.now().replace(hour=int(hh), minute=int(hh), second=int(ss))
                         time = Timestamp()
                         time.FromDatetime(dt)
                         request = protocol_pb2.SetClockRequest(time=time)
@@ -358,32 +363,31 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
             print(f"Adding node {request.request_id} to waiting list")
             self.waiting_for_opponent = request.request_id  # node_id
 
-        return protocol_pb2.JoinGameResponse(status=1)  # TODO: Remove symbol
+        return protocol_pb2.JoinGameResponse(status=1)
 
-    def request_player_to_move(self, player_id, symbol):
+    def request_player_to_move(self, player_id, marker):
         """Requests player to make a move"""
         nodes = dict(self.cluster_nodes())
-        symbol = "O" if symbol == 0 else "X"
 
         if player_id not in nodes:
             pass
             # TODO: we're screwed
         else:
-            print(f"Requesting player {player_id} to make a move {symbol}")
+            print(f"Requesting player {player_id} to make a move {marker}")
             address = nodes[player_id]
             with grpc.insecure_channel(address) as channel:
                 stub = protocol_pb2_grpc.GameServiceStub(channel)
                 response = stub.PlayerTurn(
-                    protocol_pb2.PlayerTurnRequest(request_id=self.node_id, board_state=str(self.ongoing_games[player_id].get_board()),
-                                                   marker=symbol),
-                    timeout=self.timeout)  # FIXME: send correct symbol, remove node_id
+                    protocol_pb2.PlayerTurnRequest(request_id=self.node_id,
+                                                   board_state=self.ongoing_games[player_id].get_board(),
+                                                   marker=marker),
+                    timeout=self.timeout)
 
     def PlayerTurn(self, request, context):
-        # FIXME: Print board and tell user to make its turn
-        print(f"Move request {request.marker}")
+        print(f"=== {request.marker}'s turn (player)   ===")
         print_board(request.board_state)
         return protocol_pb2.PlayerTurnResponse(status=1,
-                                               message=f"Player {request.marker} turn set; {str(request.board_state)}")
+                                               message=f"Player {request.marker} turn set; {request.board_state}")
 
     def ListBoard(self, request, context):
         """Lists the board"""
@@ -418,12 +422,8 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
     def announce_game_over(self, game):
         """Announces game over to all players"""
         nodes = dict(self.cluster_nodes())
-
-        #result = [{nodes[player]: result for player, result in game.winner}]
-        # players = [nodes[game.player_x], nodes[game.player_y]]
-        # self.winner_id = [player_id for player_id, player in self.players.items(
-        # ) if player[1] == self.game.winner][0]
         for player, result in game.winner:
+            print(player, result)
             player_address = nodes[player]
             with grpc.insecure_channel(player_address) as channel:
                 stub = protocol_pb2_grpc.GameServiceStub(channel)
@@ -438,28 +438,21 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
     def PlaceMarker(self, request, context):
         player = request.request_id
         current_id, symbol = self.ongoing_games[request.request_id].get_player_turn()
-        print(f"DEBUG: {player} {current_id} {symbol}")
+        print(f"DEBUG: {player} {symbol}")
         # FIXME: check that the player is the one who's turn it is
         game = self.ongoing_games[request.request_id]
-        opponent = None
         if not game.move(request.marker, request.board_position, request.request_id):
             return context.abort(grpc.StatusCode.INVALID_ARGUMENT, "Invalid move")
 
         if game.winner:
-            # TODO: Send winning messages to the players
+            # TODO: Send final board state to both players
             self.announce_game_over(game)
             for player in game.players: self.ongoing_games.pop(player)
-
+            return protocol_pb2.PlaceMarkerResponse(status=1, message=f"=========")
         else:
-            # TODO: Request move from opponent
             opponent, symbol = game.get_player_turn()
             self.request_player_to_move(opponent, symbol)
-
-        return protocol_pb2.PlaceMarkerResponse(
-            status=1,
-            message=f"Player {request.marker} placed marker at {request.board_position}, board: {self.ongoing_games[opponent].get_board()}",
-        )
-
+            return protocol_pb2.PlaceMarkerResponse(status=1, message=f"=== {symbol}'s turn (opponent) ===")
 
 def main():
     node_port = int(sys.argv[1])
@@ -473,7 +466,6 @@ def main():
         except KeyboardInterrupt:
             print("Exiting...")
             break
-
 
 
 if __name__ == '__main__':
