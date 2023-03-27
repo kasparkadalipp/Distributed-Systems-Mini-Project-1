@@ -10,12 +10,6 @@ enum Status {
   FAILURE = 2;
 }
 
-enum Marker {
-  MARKER_UNSPECIFIED = 0;
-  O = 1;
-  X = 2;
-}
-
 enum Result {
   RESULT_UNSPECIFIED = 0;
   DRAW = 1;
@@ -107,7 +101,7 @@ message DeclareWinnerRequest {
 message PlaceMarkerRequest {
   int32 request_id = 1;
   int32 board_position = 2;
-  Marker marker = 3;
+  string marker = 3;
 }
 
 message PlaceMarkerResponse {
@@ -119,7 +113,7 @@ message PlaceMarkerResponse {
 message PlayerTurnRequest {
   int32 request_id = 1;
   string board_state = 2;
-  Marker marker = 3;
+  string marker = 3;
 }
 
 message PlayerTurnResponse {
@@ -134,7 +128,7 @@ message JoinGameRequest {
 
 message JoinGameResponse {
   Status status = 1;
-  Marker marker = 2;
+  string marker = 2;
 }
 
 message ListBoardRequest {
@@ -146,5 +140,5 @@ message ListBoardResponse {
   string message = 2;
 
   // maps field identifier (number between 0 and 8) to player that occupies field (if any)
-  map<uint32, Marker> board = 3;
+  map<uint32, string> board = 3;
 }
