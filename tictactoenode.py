@@ -188,9 +188,6 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
                 elif match := re.match('^set-time-out' + 'players(\d+)$', user_input):
                     self.player_timeout = int(match.group(1))
                     print(f"New time-out for players = {self.player_timeout} minute")
-                elif match := re.match('^set-time-out' + 'game-master(\d+)$', user_input):
-                    timout = match.group(1)
-                    # TODO
                 elif match := re.match('^debug$', user_input):
                     pp.pprint(self.__dict__)
                 else:
@@ -200,7 +197,6 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
                           "Set-node-time Node-<node-id> <hh:mm:ss>\n"
                           "Get-node-time\n"
                           "Set-time-out players <time minutes>\n"
-                          "Set-time-out gamer-master <time minutes>\n"
                           )
             except Exception as e:
                 print(e)
