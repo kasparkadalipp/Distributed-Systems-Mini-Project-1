@@ -76,17 +76,17 @@ class Game:
     def isInvalidMove(self, position, marker, player_id):
         count_x = self.board.count("X")
         count_o = self.board.count("O")
+        marker_idx = 0 if marker == "X" else 1
+        current_player = self.get_current_player()
+        if current_player != player_id:
+            print("PlayerID", player_id, "current player", current_player)
+            return "NOT YOUR TURN"
         if position < 0 or position > 8:
             return "INVALID POSITION"
         if marker == "X" and count_x - count_o == 1:
             return "O SHOULD MOVE"
         if marker == "O" and count_o - count_x == 1:
             return "X SHOULD MOVE"
-        current_player = self.get_current_player()
-        if current_player != player_id:
-            print("PlayerID", player_id, "current player", current_player)
-            return "NOT YOUR TURN"
-        marker_idx = 0 if marker == "X" else 1
         if self.players[marker_idx] != player_id:
             return "NOT YOUR SYMBOL"
         return "POSITION IS NOT EMPTY" if self.board[position] != " " else "VALID MOVE"
