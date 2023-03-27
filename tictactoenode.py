@@ -8,6 +8,7 @@ import re
 import grpc
 import pprint as pp
 import etcd3
+from datetime import timedelta
 from google.protobuf.timestamp_pb2 import Timestamp
 import protocol_pb2
 import protocol_pb2_grpc
@@ -270,7 +271,11 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
 
     def node_time(self):
         """Local node time in milliseconds since epoch"""
-        Timestamp().ToMilliseconds() + self.time_offset
+        return Timestamp().ToMilliseconds() + self.time_offset
+
+    def formatted_time(self):
+        return timedelta(milliseconds=self.node_time())
+
 
     def GetTime(self, request, context):
         cur_time = Timestamp()
