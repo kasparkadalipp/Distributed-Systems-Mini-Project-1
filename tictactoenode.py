@@ -381,28 +381,30 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
         with grpc.insecure_channel(self.leader_address) as channel:
             stub = protocol_pb2_grpc.GameServiceStub(channel)
             request = protocol_pb2.JoinGameRequest(request_id=self.node_id)
-            stub.JoinGame(request, timeout=self.timeout)
+            response = stub.JoinGame(request, timeout=self.timeout)
+            print(f"{response.marker}")
 
     def JoinGame(self, request, context):
         if request.request_id == self.waiting_for_opponent:
             print(f"Player {request.request_id} is already waiting for opponent")
-            return protocol_pb2.JoinGameResponse(status=2)
+            return protocol_pb2.JoinGameResponse(status=2, marker="ERROR: You're still waiting for an opponent")
         elif request.request_id in self.ongoing_games:
             print(f"Player {request.request_id} is already part of an ongoing game")
-            return protocol_pb2.JoinGameResponse(status=2)
+            return protocol_pb2.JoinGameResponse(status=2, marker="ERROR: You're already part of an ongoing game")
         elif self.waiting_for_opponent:
+            print(f"=== GAME START: Player_{self.waiting_for_opponent} vs Player_{request.request_id}")
             game = Game(self.waiting_for_opponent, request.request_id, self.node_time())
             self.ongoing_games[self.waiting_for_opponent] = game
             self.ongoing_games[request.request_id] = game
             self.waiting_for_opponent = None
             player, symbol = game.get_player_turn()
             self.request_player_to_move(player, symbol)
-            print(f"===GAME {self.waiting_for_opponent} vs {request.request_id} STARTING===")
         else:
             print(f"Adding node {request.request_id} to waiting list")
             self.waiting_for_opponent = request.request_id  # node_id
 
-        return protocol_pb2.JoinGameResponse(status=1)
+        success_response = "=== Waiting for opponent..." if self.waiting_for_opponent else "=== Game is starting!"
+        return protocol_pb2.JoinGameResponse(status=1, marker=success_response)
 
     def request_player_to_move(self, player_id, marker):
         """Requests player to make a move"""
