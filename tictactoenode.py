@@ -20,11 +20,12 @@ def get_host_ip():
     hostname = socket.gethostname()
     return socket.gethostbyname(hostname)
 
+
 def format_time(value):
     return datetime.fromtimestamp(value / 1000).strftime('%H:%M:%S')
 
+
 def print_board(board: str, timestamps=False):
-    print("PRINT BOARD", board.replace(" ", "_"))
     board = list(board.split(","))
     if timestamps:
         board = [value if value != " " else " " * 10 for value in board]
@@ -41,6 +42,7 @@ def print_board(board: str, timestamps=False):
            " {} | {} | {}\n" +
            separator +
            " {} | {} | {}").format(*board))
+
 
 class Game:
 
@@ -118,7 +120,7 @@ class Game:
             [0, 3, 6], [1, 4, 7], [2, 5, 8],
             [0, 4, 8], [2, 4, 6]
         ]
-        for combination in winning_combination:  # FIXME both currently lose
+        for combination in winning_combination:
             if self.board[combination[0]] == self.board[combination[1]] == self.board[combination[2]] != " ":
                 player_x, player_o = self.players
                 self.winner = [(player_x, "win" if player_o == self.get_current_player() else "loss"),
@@ -139,7 +141,7 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
     def __init__(self, node_port, etcd_host, etcd_port):
         self.server = None
         self.timeout = 10  # timeout used for RPC calls in seconds
-        self.player_timeout = 1 # timeout in minutes for player
+        self.player_timeout = 1  # timeout in minutes for player
         self.leader_id = None
         self.port = node_port
         self.address = f"{get_host_ip()}:{self.port}"
@@ -149,7 +151,6 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
         # =====
         self.ongoing_games = {}  # { game_id: (X-player_id, O-player_id, Game) }
         self.waiting_for_opponent = None  # Node id which is waiting for opponent
-        self.symbol = None  # Maybe
         # =====
         self.serve()
         self.time_offset = 0  # offset of clock in milliseconds
@@ -172,7 +173,7 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
                 elif re.match('^join$', user_input):
                     self.join_game()
                 elif match := re.match(r'^get-node-time', user_input):
-                    print("Time on current node:", datetime.fromtimestamp(self.node_time()/1000))
+                    print("Time on current node:", datetime.fromtimestamp(self.node_time() / 1000))
                 elif match := re.match(r'^set-node-time' + r'node-(\d+)' + r'(\d\d):(\d\d):(\d\d)$', user_input):
                     node, hh, mm, ss = match.groups()
                     node = int(node)
@@ -231,7 +232,7 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
         current_time = self.node_time()
         for game in set(self.ongoing_games.values()):
             last_action = max([time for _, time in game.move_list.values()] + [game.start_time])
-            if (current_time - last_action)/1000/60 > self.player_timeout:
+            if (current_time - last_action) / 1000 / 60 > self.player_timeout:
                 player_x, player_o = game.players
                 print(f"Timeout for game of node {player_o} and node {player_x}")
                 self.announce_game_over(game)
@@ -307,7 +308,7 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
 
     def node_time(self):
         """Local node time in milliseconds since epoch"""
-        return int(time.time()*1000) + self.time_offset
+        return int(time.time() * 1000) + self.time_offset
 
     def formatted_time(self):
         return datetime.fromtimestamp(self.node_time() / 1000).strftime('%HH:%MM:%SS')
@@ -470,7 +471,7 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
         nodes = dict(self.cluster_nodes())
         if not game.winner:
             player_x, player_o = game.players
-            game.winner = [(player_o,"draw"), (player_x,"draw")]
+            game.winner = [(player_o, "draw"), (player_x, "draw")]
         for player, result in game.winner:
             print(player, result)
             player_address = nodes[player]
@@ -488,7 +489,7 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
     def PlaceMarker(self, request, context):
         player = request.request_id
         current_id, symbol = self.ongoing_games[request.request_id].get_player_turn()
-        print(f"DEBUG: {player} {symbol}")
+        #print(f"DEBUG: {player} {symbol}")
         # FIXME: check that the player is the one who's turn it is
         game = self.ongoing_games[request.request_id]
         if not game.move(request.marker, request.board_position, request.request_id, self.node_time()):
