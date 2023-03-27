@@ -195,6 +195,7 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
                     pp.pprint(self.__dict__)
                 else:
                     print("Accepted commands are:\n"
+                          "Start-game\n"
                           "List-board\n"
                           "Set-symbol <position 0-9>, <marker X or O>\n"
                           "Set-node-time Node-<node-id> <hh:mm:ss>\n"
@@ -421,7 +422,7 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
                     timeout=self.timeout)
 
     def PlayerTurn(self, request, context):
-        print(f"=== {request.marker}'s turn (player) =====")
+        print(f"=== P{request.request_id}'s turn: {request.marker} =====")
         print_board(request.board_state, False)
         return protocol_pb2.PlayerTurnResponse(status=1,
                                                message=f"Player {request.marker} turn set; {request.board_state}")
@@ -429,7 +430,6 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
     def ListBoard(self, request, context):
         """Lists the board"""
         game = self.ongoing_games[request.node_id]
-        # game must be started
         return protocol_pb2.ListBoardResponse(status=1, message=f"Board: {game.get_board()}",
                                               board=game.get_board())
 
