@@ -96,7 +96,7 @@ class Game:
         return False
 
     def get_player_turn(self):
-        return (self.players[self.turn % 2], self.turn % 2 + 1)
+        return self.players[self.turn % 2], self.turn % 2 + 1
 
 
 class Node(protocol_pb2_grpc.GameServiceServicer):
@@ -125,7 +125,7 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
 
     def accept_user_input(self):
         while True:
-            user_input = input("Enter a command: ").replace(' ', '').lower()
+            user_input = input().replace(' ', '').lower()
             if match := re.match('^set-symbol([0-9]),([xo])$', user_input):
                 position, marker = match.groups()
                 self.send_move(int(position), marker)
@@ -309,12 +309,7 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
         with grpc.insecure_channel(self.leader_address) as channel:
             stub = protocol_pb2_grpc.GameServiceStub(channel)
             request = protocol_pb2.JoinGameRequest(request_id=self.node_id)
-            response = stub.JoinGame(request, timeout=self.timeout)
-            if response.status != 1:
-                return False
-            self.symbol = "O" if response.marker == 1 else "X"
-            print(f"Joined game as {self.symbol} player")
-            return True
+            stub.JoinGame(request, timeout=self.timeout)
 
     def JoinGame(self, request, context):
         # TODO: check that player isn't already part of an ongoing game
@@ -326,11 +321,12 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
             self.waiting_for_opponent = None
             player, symbol = game.get_player_turn()
             self.request_player_to_move(player, symbol)
+            print("MESSAGE SENT")
         else:
             print(f"Adding node {request.request_id} to waiting list")
             self.waiting_for_opponent = request.request_id  # node_id
 
-        return protocol_pb2.JoinGameResponse(status=1, marker=symbol)  # TODO: Remove symbol
+        return protocol_pb2.JoinGameResponse(status=1)  # TODO: Remove symbol
 
     def request_player_to_move(self, player_id, symbol):
         """Requests player to make a move"""
@@ -343,15 +339,16 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
             with grpc.insecure_channel(address) as channel:
                 stub = protocol_pb2_grpc.GameServiceStub(channel)
                 response = stub.PlayerTurn(
-                    protocol_pb2.PlayerTurnRequest(request_id=self.node_id, board_state=str(self.game.get_board()),
-                                                   marker=0),
+                    protocol_pb2.PlayerTurnRequest(request_id=self.node_id, board_state=str(self.ongoing_games[player_id].get_board()),
+                                                   marker="x"),
                     timeout=self.timeout)  # FIXME: send correct symbol, remove node_id
 
     def PlayerTurn(self, request, context):
         # FIXME: Print board and tell user to make its turn
+        print("CALL PLAYER TURN")
         print(str(request.board_state))
         return protocol_pb2.PlayerTurnResponse(status=1,
-                                               message=f"Player {symbol} turn set; {str(request.board_state)}")
+                                               message=f"Player {self.symbol} turn set; {str(request.board_state)}")
 
     def ListBoard(self, request, context):
         """Lists the board"""
