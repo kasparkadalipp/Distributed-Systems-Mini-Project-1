@@ -35,19 +35,11 @@ class Game:
         self.player_o = player_o
 
     def get_board(self):
-
-        return f""" 
-        
-        
-                    {self.board[0]}|{self.board[1]}|{self.board[2]}
-                    -----
-                    {self.board[3]}|{self.board[4]}|{self.board[5]}
-                    -----
-                    {self.board[6]}|{self.board[7]}|{self.board[8]}
-                    
-                    
-                    
-            """
+        return (" {} | {} | {}\n"
+                "---+---+---\n"
+                " {} | {} | {}\n"
+                "---+---+---\n"
+                " {} | {} | {}").format(*self.board)
 
     def move(self, player, position):
         symbol = "O" if player == 1 else "X"
@@ -115,9 +107,9 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
         self.etcd = etcd3.client(host=etcd_host, port=etcd_port)
         self.node_id = self.generate_unique_node_id()
         # =====
-        self.ongoing_games = {} # { game_id: (X-player_id, O-player_id, Game) }
-        self.waiting_for_opponent = None # Node id which is waiting for opponent
-        self.symbol = None # Maybe
+        self.ongoing_games = {}  # { game_id: (X-player_id, O-player_id, Game) }
+        self.waiting_for_opponent = None  # Node id which is waiting for opponent
+        self.symbol = None  # Maybe
         # =====
         self.serve()
         self.time_offset = 0  # offset of clock in milliseconds
@@ -270,7 +262,7 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
                         timeout=self.timeout).time.ToMilliseconds()
                 except Exception:
                     pass
-            avg_time = sum(times.values())/len(times.values())
+            avg_time = sum(times.values()) / len(times.values())
             futures = []
             for (node_id, node_time) in times.items():
                 stub = protocol_pb2_grpc.GameServiceStub(channels[node_id])
@@ -306,7 +298,7 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
         while not increment_successful:
             counter = int(self.etcd.get('/node_counter')[0])
             increment_successful = self.etcd.replace(
-                '/node_counter', str(counter), str(counter+1))
+                '/node_counter', str(counter), str(counter + 1))
         return counter
 
     def join_game(self):
@@ -333,9 +325,9 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
             self.request_player_to_move(player, symbol)
         else:
             print(f"Adding node {request.request_id} to waiting list")
-            self.waiting_for_opponent = request.request_id # node_id
-        
-        return protocol_pb2.JoinGameResponse(status=1, marker=symbol) # TODO: Remove symbol
+            self.waiting_for_opponent = request.request_id  # node_id
+
+        return protocol_pb2.JoinGameResponse(status=1, marker=symbol)  # TODO: Remove symbol
 
     def request_player_to_move(self, player_id, symbol):
         """Requests player to make a move"""
@@ -349,12 +341,14 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
                 stub = protocol_pb2_grpc.GameServiceStub(channel)
                 response = stub.PlayerTurn(
                     protocol_pb2.PlayerTurnRequest(request_id=self.node_id, board_state=str(self.game.get_board()),
-                                                marker=0), timeout=self.timeout) # FIXME: send correct symbol, remove node_id
+                                                   marker=0),
+                    timeout=self.timeout)  # FIXME: send correct symbol, remove node_id
 
     def PlayerTurn(self, request, context):
         # FIXME: Print board and tell user to make its turn
         print(str(request.board_state))
-        return protocol_pb2.PlayerTurnResponse(status=1, message=f"Player {symbol} turn set; {str(request.board_state)}")
+        return protocol_pb2.PlayerTurnResponse(status=1,
+                                               message=f"Player {symbol} turn set; {str(request.board_state)}")
 
     def ListBoard(self, request, context):
         """Lists the board"""
@@ -427,6 +421,7 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
             status=1,
             message=f"Player {self.player} placed marker at {request.board_position}, board: {self.game.get_board()}",
         )
+
 
 def main():
     match len(sys.argv):
