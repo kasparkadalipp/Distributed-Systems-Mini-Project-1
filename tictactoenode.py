@@ -8,7 +8,7 @@ import re
 import grpc
 import pprint as pp
 import etcd3
-from datetime import timedelta
+from datetime import datetime
 from google.protobuf.timestamp_pb2 import Timestamp
 import protocol_pb2
 import protocol_pb2_grpc
@@ -98,7 +98,7 @@ class Game:
             [0, 3, 6], [1, 4, 7], [2, 5, 8],
             [0, 4, 8], [2, 4, 6]
         ]
-        for combination in winning_combination: # FIXME both currently lose
+        for combination in winning_combination:  # FIXME both currently lose
             if self.board[combination[0]] == self.board[combination[1]] == self.board[combination[2]] != " ":
                 player_x, player_o = self.players
                 self.winner = [(player_x, "win" if player_o == self.get_current_player() else "loss"),
@@ -207,7 +207,7 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
         self.etcd.put(f"/nodes/{self.node_id}", self.address)
 
     def has_healthy_master(self):
-        """Returns true if local node is aware of current leader and current leader is up and running, i.e. reachable"""
+        """Returns true if local node is aware of current leader andatetime.now()d current leader is up and running, i.e. reachable"""
         nodes = dict(self.cluster_nodes())
         if self.leader_id not in nodes:
             return False
@@ -274,8 +274,7 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
         return Timestamp().ToMilliseconds() + self.time_offset
 
     def formatted_time(self):
-        return timedelta(milliseconds=self.node_time())
-
+        return datetime.fromtimestamp(self.node_time() / 1000).strftime('%HH:%MM:%SS')
 
     def GetTime(self, request, context):
         cur_time = Timestamp()
@@ -464,6 +463,7 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
             self.request_player_to_move(opponent, symbol)
             return protocol_pb2.PlaceMarkerResponse(status=1, message=f"=== {symbol}'s turn (opponent) ===")
 
+
 def main():
     if len(sys.argv) == 2:
         node_port = int(sys.argv[1])
@@ -474,7 +474,7 @@ def main():
         etcd_port = int(etcd_port)
     else:
         sys.exit(f"Usage: {sys.argv[0]} node-port [etcd-host:etcd-port]")
-    
+
     node = Node(node_port, etcd_host, etcd_port)
 
     while True:
