@@ -43,16 +43,22 @@ class Game:
         return "".join(self.board)
 
     def isInvalidMove(self, position, marker):
+        print(f"FVALUES {position}, {marker}")
         count_x = self.board.count("X")
         count_o = self.board.count("O")
-        if position < 0 or position > 9:
+        if position < 0 or position > 8:
+            print("INVALID POSITION")
             return False
         if marker == "X" and count_x - count_o == 1:
+            print("O SHOULD MOVE")
             return False
         if marker == "O" and count_o - count_x == 1:
+            print("x SHOULD MOVE")
             return False
         if self.board[position] != " ":
+            print("POSITION IS NOT EMPTY")
             return False
+        print("VALID MOVE")
         return True
 
     def move(self, marker, position):
@@ -384,7 +390,7 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
             stub = protocol_pb2_grpc.GameServiceStub(channel)
             response = stub.PlaceMarker(
                 protocol_pb2.PlaceMarkerRequest(request_id=self.node_id, board_position=board_position,
-                                                marker=self.symbol), timeout=self.timeout)
+                                                marker=marker), timeout=self.timeout)
             if response.status == 1:
                 self.is_turn = False
                 print(response.message)
