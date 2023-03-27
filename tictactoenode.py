@@ -48,22 +48,22 @@ class Game:
         count_o = self.board.count("O")
         if position < 0 or position > 8:
             print("INVALID POSITION")
-            return False
+            return True
         if marker == "X" and count_x - count_o == 1:
             print("O SHOULD MOVE")
-            return False
+            return True
         if marker == "O" and count_o - count_x == 1:
             print("x SHOULD MOVE")
-            return False
+            return True
         if self.board[position] != " ":
             print("POSITION IS NOT EMPTY")
-            return False
+            return True
         print("VALID MOVE")
-        return True
+        return False
 
     def move(self, marker, position):
-        # if self.isInvalidMove(position, marker):
-        #     return False
+        if self.isInvalidMove(position, marker):
+            return False
 
         print(f"Player {marker} is moving to position {position}")
 
@@ -123,7 +123,7 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
                 user_input = input().replace(' ', '').lower()
                 if match := re.match('^set-symbol([0-9]),([xo])$', user_input):
                     position, marker = match.groups()
-                    self.send_move(int(position), marker)
+                    self.send_move(int(position), marker.upper())
                 elif re.match('^list-board$', user_input):
                     self.list_board()
                 elif re.match('^join$', user_input):
@@ -330,7 +330,7 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
             print(f"Player {request.request_id} is already part of an ongoing game")
             return protocol_pb2.JoinGameResponse(status=2)
 
-        if self.waiting_for_opponent:
+        if self.waiting_for_opponent and self.waiting_for_opponent != request.request_id:
             game = Game(self.waiting_for_opponent, request.request_id)
             self.ongoing_games[self.waiting_for_opponent] = game
             self.ongoing_games[request.request_id] = game
@@ -420,6 +420,10 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
         return protocol_pb2.Acknowledged()
 
     def PlaceMarker(self, request, context):
+        player = request.request_id
+        current_id, symbol = self.ongoing_games[request.request_id].get_player_turn()
+        if player != current_id:
+            return context.abort(grpc.StatusCode.INVALID_ARGUMENT, "Not your turn")
         game = self.ongoing_games[request.request_id]
         opponent = None
         if not game.move(request.marker, request.board_position):
