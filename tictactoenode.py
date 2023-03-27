@@ -302,6 +302,8 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
     def NotifyOfNewLeader(self, request, context):
         if self.leader_id != request.leader_id:
             print(f"Elected leader: {request.leader_id}")
+            if self.leader_id:
+                print("Previous games are no longer valid!")
             self.leader_id = request.leader_id
             self.leader_address = dict(self.cluster_nodes())[self.leader_id]
         return protocol_pb2.Acknowledged()

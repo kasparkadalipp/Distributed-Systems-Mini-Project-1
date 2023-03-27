@@ -17,6 +17,14 @@ Required python libraries:
 
 ## Running
 
+### Generating protocol classes
+
+GRPC protocol classes can be generated using following command:
+
+```
+python -m grpc_tools.protoc -I . --python_out=. --grpc_python_out=. protocol.proto
+```
+
 ### etcd
 
 `etcd` needs to be available for nodes and should be started. In case nodes are remote, `etcd` needs to be started to allow remote connections:
@@ -30,7 +38,7 @@ etcd --listen-client-urls 'http://0.0.0.0:2379' --advertise-client-urls 'http://
 Nodes can be started with following command:
 
 ```
-python -i tictactoe.py port [etcd_host:etcd_port]
+python tictactoe.py port [etcd_host:etcd_port]
 ```
 
 `etcd` host and port can be omitted in which case `localhost:2379` will be used.
@@ -47,6 +55,8 @@ To avoid hardcoding the nodes and allow dynamically adding and removing of nodes
 
 Each node registers itself periodically with `etcd` and announces its address and port where it is listening for incoming request.
 
+In order to avoid conflicting node ids, we use an atomically increasing counter from etcd to assign the node ids.
+
 ### Leader election
 
 Leader election is performed automatically as background task using bullying algorithm.
@@ -56,3 +66,8 @@ Lowest process id will be elected as the leader. This is to avoid frequent chang
 ### Time synchronization
 
 Time synchronization is performed automatically by the leader node as background task. Each nodes time is defined by the system clock and an offset which may be adjusted by the leader.
+
+### Timeout
+
+* Timeout for players can be set on the game node, which checks every 10 seconds and removes stale games with no player actions
+* Timeout for the master itself is redundant in our implementation, because faulty master will be detected automatically when nodes query the master every 10 seconds to see if he is healthy. In such a case, reelection of the leader occurs, which automatically invalidates all previous games.
