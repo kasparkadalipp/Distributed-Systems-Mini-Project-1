@@ -76,17 +76,17 @@ class Game:
     def isInvalidMove(self, position, marker, player_id):
         count_x = self.board.count("X")
         count_o = self.board.count("O")
+        marker_idx = 0 if marker == "X" else 1
+        current_player = self.get_current_player()
+        if current_player != player_id:
+            print("PlayerID", player_id, "current player", current_player)
+            return "NOT YOUR TURN"
         if position < 0 or position > 8:
             return "INVALID POSITION"
         if marker == "X" and count_x - count_o == 1:
             return "O SHOULD MOVE"
         if marker == "O" and count_o - count_x == 1:
             return "X SHOULD MOVE"
-        current_player = self.get_current_player()
-        if current_player != player_id:
-            print("PlayerID", player_id, "current player", current_player)
-            return "NOT YOUR TURN"
-        marker_idx = 0 if marker == "X" else 1
         if self.players[marker_idx] != player_id:
             return "NOT YOUR SYMBOL"
         return "POSITION IS NOT EMPTY" if self.board[position] != " " else "VALID MOVE"
@@ -99,7 +99,7 @@ class Game:
         if move_msg != "VALID MOVE":
             return False, move_msg
 
-        print(f"Player {marker} is moving to position {position}")
+        #print(f"Player {marker} is moving to position {position}")
 
         self.board[position] = marker
         self.move_list[position] = (marker, time_)
@@ -188,9 +188,6 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
                 elif match := re.match('^set-time-out' + 'players(\d+)$', user_input):
                     self.player_timeout = int(match.group(1))
                     print(f"New time-out for players = {self.player_timeout} minute")
-                elif match := re.match('^set-time-out' + 'game-master(\d+)$', user_input):
-                    timout = match.group(1)
-                    # TODO
                 elif match := re.match('^debug$', user_input):
                     pp.pprint(self.__dict__)
                 else:
@@ -201,7 +198,6 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
                           "Set-node-time Node-<node-id> <hh:mm:ss>\n"
                           "Get-node-time\n"
                           "Set-time-out players <time minutes>\n"
-                          "Set-time-out gamer-master <time minutes>\n"
                           )
             except Exception as e:
                 print(e)
@@ -411,7 +407,7 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
         """Requests player to make a move"""
         nodes = dict(self.cluster_nodes())
         if player_id in nodes:
-            print(f"Requesting player {player_id} to make a move {marker}")
+            #print(f"Requesting player {player_id} to make a move {marker}")
             address = nodes[player_id]
             with grpc.insecure_channel(address) as channel:
                 stub = protocol_pb2_grpc.GameServiceStub(channel)
@@ -461,6 +457,7 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
 
     def announce_game_over(self, game):
         """Announces game over to all players"""
+        print("Game concluded")
         nodes = dict(self.cluster_nodes())
         if not game.winner:
             player_x, player_o = game.players
@@ -480,7 +477,6 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
         return protocol_pb2.Acknowledged()
 
     def PlaceMarker(self, request, context):
-        print("Game concluded")
         game = self.ongoing_games[request.request_id]
         move, move_message = game.move(request.marker, request.board_position, request.request_id, self.node_time())
         if not move:
