@@ -455,9 +455,16 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
             return protocol_pb2.PlaceMarkerResponse(status=1, message=f"=== {symbol}'s turn (opponent) ===")
 
 def main():
-    node_port = int(sys.argv[1])
-    etcd_host = "localhost"
-    etcd_port = 2379
+    if len(sys.argv) == 2:
+        node_port = int(sys.argv[1])
+        etcd_host, etcd_port = "localhost", 2379
+    elif len(sys.argv) == 3:
+        node_port = int(sys.argv[1])
+        etcd_host, etcd_port = sys.argv[2].split(":", 1)
+        etcd_port = int(etcd_port)
+    else:
+        sys.exit(f"Usage: {sys.argv[0]} node-port [etcd-host:etcd-port]")
+    
     node = Node(node_port, etcd_host, etcd_port)
 
     while True:
