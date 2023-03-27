@@ -133,9 +133,24 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
                 self.list_board()
             elif re.match('^join$', user_input):
                 self.join_game()
-            elif match := re.match('^set-node-time' + 'node-\d+' + '(\d\d):(\d\d):(\d\d)$', user_input):
-                hh, mm, ss = match.groups()
-                # TODO
+            elif match := re.match(r'^set-node-time' + r'node-(\d+)' + r'(\d\d):(\d\d):(\d\d)$', user_input):
+                node, hh, mm, ss = match.groups()
+                node = int(node)
+                if self.node_id != node and self.node_id != self.leader_id:
+                    print(f"Rejected, non-leader node is only allowed to modify its own clock!")
+                    continue
+                nodes = dict(self.cluster_nodes())
+                if not node in nodes:
+                    print(f"Invalid node id {node}")
+                    continue
+                with grpc.insecure_channel(nodes[node]) as channel:
+                    stub = protocol_pb2_grpc.GameServiceStub(channel)
+                    dt = datetime.datetime.now().replace(hour = int(hh), minute=int(hh), second=int(ss))
+                    time = Timestamp()
+                    time.FromDatetime(dt)
+                    request = protocol_pb2.SetClockRequest(time=time)
+                    print(stub.SetClock(request).message)
+                
             elif match := re.match('^set-time-out' + 'players(\d+)$', user_input):
                 timout = match.group(1)
                 # TODO
@@ -272,7 +287,7 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
                 offset = int(avg_time - node_time)
                 if not offset:
                     continue
-                print(f"Adjusting time offset of node {node_id} by {offset}")
+                print(f"Adjusting time offset of node {node_id} by {offset} milliseconds")
                 request = protocol_pb2.AdjustClockRequest(offset_ms=offset)
                 futures.append(executor.submit(stub.AdjustClock, request))
             concurrent.futures.wait(futures, timeout=self.timeout)
