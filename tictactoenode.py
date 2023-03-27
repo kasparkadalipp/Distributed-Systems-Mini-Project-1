@@ -34,12 +34,15 @@ class Game:
         self.player_x = player_x
         self.player_o = player_o
 
-    def get_board(self):
-        return (" {} | {} | {}\n"
+    def print_board(self):
+        print((" {} | {} | {}\n"
                 "---+---+---\n"
                 " {} | {} | {}\n"
                 "---+---+---\n"
-                " {} | {} | {}").format(*self.board)
+                " {} | {} | {}").format(*self.board))
+
+    def get_board(self):
+        return self.board
 
     def move(self, player, position):
         symbol = "O" if player == 1 else "X"
