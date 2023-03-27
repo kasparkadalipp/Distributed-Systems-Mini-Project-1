@@ -45,7 +45,7 @@ class Game:
         return self.board
 
     def move(self, player, position):
-        symbol = "O" if player == 1 else "X"
+        symbol = "O" if player == 0 else "X"
         print(f"Player {symbol} is moving to position {position}")
         if self.board[position] == " ":
             self.board[position] = symbol
@@ -329,6 +329,10 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
     def JoinGame(self, request, context):
         # TODO: check that player isn't already part of an ongoing game
 
+        if request.request_id in self.ongoing_games:
+            print(f"Player {request.request_id} is already part of an ongoing game")
+            return protocol_pb2.JoinGameResponse(status=2)
+
         if self.waiting_for_opponent:
             game = Game(self.waiting_for_opponent, request.request_id)
             self.ongoing_games[self.waiting_for_opponent] = game
@@ -336,7 +340,7 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
             self.waiting_for_opponent = None
             player, symbol = game.get_player_turn()
             self.request_player_to_move(player, symbol)
-            print("MESSAGE SENT")
+            print("GAME STARTING")
         else:
             print(f"Adding node {request.request_id} to waiting list")
             self.waiting_for_opponent = request.request_id  # node_id
@@ -346,16 +350,19 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
     def request_player_to_move(self, player_id, symbol):
         """Requests player to make a move"""
         nodes = dict(self.cluster_nodes())
+        symbol = "O" if symbol == 0 else "X"
+
         if player_id not in nodes:
             pass
             # TODO: we're screwed
         else:
+            print(f"Requesting player {player_id} to make a move {symbol}")
             address = nodes[player_id]
             with grpc.insecure_channel(address) as channel:
                 stub = protocol_pb2_grpc.GameServiceStub(channel)
                 response = stub.PlayerTurn(
                     protocol_pb2.PlayerTurnRequest(request_id=self.node_id, board_state=str(self.ongoing_games[player_id].get_board()),
-                                                   marker="x"),
+                                                   marker=symbol),
                     timeout=self.timeout)  # FIXME: send correct symbol, remove node_id
 
     def PlayerTurn(self, request, context):
