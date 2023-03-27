@@ -119,48 +119,51 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
 
     def accept_user_input(self):
         while True:
-            user_input = input().replace(' ', '').lower()
-            if match := re.match('^set-symbol([0-9]),([xo])$', user_input):
-                position, marker = match.groups()
-                self.send_move(int(position), marker)
-            elif re.match('^list-board$', user_input):
-                self.list_board()
-            elif re.match('^join$', user_input):
-                self.join_game()
-            elif match := re.match(r'^set-node-time' + r'node-(\d+)' + r'(\d\d):(\d\d):(\d\d)$', user_input):
-                node, hh, mm, ss = match.groups()
-                node = int(node)
-                if self.node_id != node and self.node_id != self.leader_id:
-                    print(f"Rejected, non-leader node is only allowed to modify its own clock!")
-                    continue
-                nodes = dict(self.cluster_nodes())
-                if not node in nodes:
-                    print(f"Invalid node id {node}")
-                    continue
-                with grpc.insecure_channel(nodes[node]) as channel:
-                    stub = protocol_pb2_grpc.GameServiceStub(channel)
-                    dt = datetime.datetime.now().replace(hour = int(hh), minute=int(hh), second=int(ss))
-                    time = Timestamp()
-                    time.FromDatetime(dt)
-                    request = protocol_pb2.SetClockRequest(time=time)
-                    print(stub.SetClock(request).message)
-                
-            elif match := re.match('^set-time-out' + 'players(\d+)$', user_input):
-                timout = match.group(1)
-                # TODO
-            elif match := re.match('^set-time-out' + 'game-master(\d+)$', user_input):
-                timout = match.group(1)
-                # TODO
-            elif match := re.match('^debug$', user_input):
-                pp.pprint(self.__dict__)
-            else:
-                print("Accepted commands are:\n"
-                      "List-board\n"
-                      "Set-symbol <position 0-9>, <marker X or O>\n"
-                      "Set-node-time Node-<node-id> <hh:mm:ss>\n"
-                      "Set-time-out players <time minutes>\n"
-                      "Set-time-out gamer-master <time minutes>\n"
-                      )
+            try:
+                user_input = input().replace(' ', '').lower()
+                if match := re.match('^set-symbol([0-9]),([xo])$', user_input):
+                    position, marker = match.groups()
+                    self.send_move(int(position), marker)
+                elif re.match('^list-board$', user_input):
+                    self.list_board()
+                elif re.match('^join$', user_input):
+                    self.join_game()
+                elif match := re.match(r'^set-node-time' + r'node-(\d+)' + r'(\d\d):(\d\d):(\d\d)$', user_input):
+                    node, hh, mm, ss = match.groups()
+                    node = int(node)
+                    if self.node_id != node and self.node_id != self.leader_id:
+                        print(f"Rejected, non-leader node is only allowed to modify its own clock!")
+                        continue
+                    nodes = dict(self.cluster_nodes())
+                    if not node in nodes:
+                        print(f"Invalid node id {node}")
+                        continue
+                    with grpc.insecure_channel(nodes[node]) as channel:
+                        stub = protocol_pb2_grpc.GameServiceStub(channel)
+                        dt = datetime.datetime.now().replace(hour = int(hh), minute=int(hh), second=int(ss))
+                        time = Timestamp()
+                        time.FromDatetime(dt)
+                        request = protocol_pb2.SetClockRequest(time=time)
+                        print(stub.SetClock(request).message)
+
+                elif match := re.match('^set-time-out' + 'players(\d+)$', user_input):
+                    timout = match.group(1)
+                    # TODO
+                elif match := re.match('^set-time-out' + 'game-master(\d+)$', user_input):
+                    timout = match.group(1)
+                    # TODO
+                elif match := re.match('^debug$', user_input):
+                    pp.pprint(self.__dict__)
+                else:
+                    print("Accepted commands are:\n"
+                          "List-board\n"
+                          "Set-symbol <position 0-9>, <marker X or O>\n"
+                          "Set-node-time Node-<node-id> <hh:mm:ss>\n"
+                          "Set-time-out players <time minutes>\n"
+                          "Set-time-out gamer-master <time minutes>\n"
+                          )
+            except Exception as e:
+                print(e)
 
     def cluster_nodes(self):
         """Returns all nodes registered in the cluster as a tuple containing the node id and the address"""
@@ -445,7 +448,12 @@ def main():
     node = Node(node_port, etcd_host, etcd_port)
 
     while True:
-        node.accept_user_input()
+        try:
+            node.accept_user_input()
+        except KeyboardInterrupt:
+            print("Exiting...")
+            break
+
 
 
 if __name__ == '__main__':
