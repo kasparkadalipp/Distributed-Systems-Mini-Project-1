@@ -43,11 +43,14 @@ python tictactoe.py port [etcd_host:etcd_port]
 
 `etcd` host and port can be omitted in which case `localhost:2379` will be used.
 
+Note, there is no limitation for the number of nodes which are connecting, the leader can support multiple concurrent ongoing games.
+
 ## Design decisions
 
 ### Assumptions
 
 * No authentication has been implemented, it's assumed all nodes are trusted entities and won't misbehave.
+* Nodes may connect/disconnect at any given time, and as long as leader node remains no unrelated game will be impacted.
 
 ### Service discovery
 
