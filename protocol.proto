@@ -133,6 +133,7 @@ message JoinGameResponse {
 }
 
 message ListBoardRequest {
+  int32 node_id = 1;
 }
 
 message ListBoardResponse {
@@ -141,5 +142,5 @@ message ListBoardResponse {
   string message = 2;
 
   // maps field identifier (number between 0 and 8) to player that occupies field (if any)
-  map<uint32, string> board = 3;
+  string board = 3;
 }

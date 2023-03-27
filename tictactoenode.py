@@ -20,10 +20,18 @@ def get_host_ip():
     hostname = socket.gethostname()
     return socket.gethostbyname(hostname)
 
+def format_time(value):
+    return datetime.fromtimestamp(value / 1000).strftime('%H:%M:%S')
 
 def print_board(board: str, timestamps=False):
-    board = board.split(",")
+    print("PRINT BOARD", board.replace(" ", "_"))
+    board = list(board.split(","))
     if timestamps:
+        board = [value if value != " " else " " * 10 for value in board]
+        for i in range(len(board)):
+            if match := re.match(r"([XO]):(\d+)", board[i]):
+                marker, timestamp = match.groups()
+                board[i] = f"{marker}:{format_time(int(timestamp))}"
         separator = "------------+------------+------------\n"
     else:
         board = [value.split(":")[0] for value in board]
@@ -45,7 +53,7 @@ class Game:
         self.players = [player_x, player_o]
         self.markers = ["X", "O"]
         self.move_list = {}
-        self.start_time = time
+        self.start_time = start_time
 
     def get_board(self):
         s = []
@@ -54,8 +62,8 @@ class Game:
                 symbol, time = self.move_list[i]
                 s.append(f"{symbol}:{time}")
             else:
-                s.append("")
-        return ",".join(self.board)
+                s.append(" ")
+        return ",".join(s)
 
     def get_current_marker(self):
         return self.markers[self.turn % 2]
@@ -184,7 +192,7 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
                         print(stub.SetClock(request).message)
 
                 elif match := re.match('^set-time-out' + 'players(\d+)$', user_input):
-                    self.player_timeout = match.group(1)
+                    self.player_timeout = int(match.group(1))
                     print(f"New time-out for players = {self.player_timeout} minute")
                 elif match := re.match('^set-time-out' + 'game-master(\d+)$', user_input):
                     timout = match.group(1)
@@ -219,15 +227,16 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
                 self.check_game_timeout()
             time.sleep(self.timeout)
 
-    def check_game_timeout():
+    def check_game_timeout(self):
         current_time = self.node_time()
         for game in set(self.ongoing_games.values()):
             last_action = max([time for _, time in game.move_list.values()] + [game.start_time])
             if (current_time - last_action)/1000/60 > self.player_timeout:
-                print(f"Timeout for game of node {game.player_o} and node {game.player_x}")
+                player_x, player_o = game.players
+                print(f"Timeout for game of node {player_o} and node {player_x}")
                 self.announce_game_over(game)
-                pop(self.ongoing_games, game.player_o)
-                pop(self.ongoing_games, game.player_x)
+                self.ongoing_games.pop(player_o)
+                self.ongoing_games.pop(player_x)
 
     def register(self):
         """Registers node within etcd so it is discoverable for other nodes"""
@@ -425,19 +434,22 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
 
     def ListBoard(self, request, context):
         """Lists the board"""
+        game = self.ongoing_games[request.node_id]
         # game must be started
-        return protocol_pb2.ListBoardResponse(status=1, message=f"Board: {self.game.get_board()}",
-                                              board=self.game.get_board())
+        return protocol_pb2.ListBoardResponse(status=1, message=f"Board: {game.get_board()}",
+                                              board=game.get_board())
 
     def list_board(self):
         """Lists the board"""
         with grpc.insecure_channel(self.leader_address) as channel:
             stub = protocol_pb2_grpc.GameServiceStub(channel)
             response = stub.ListBoard(
-                protocol_pb2.ListBoardRequest(), timeout=self.timeout)
+                protocol_pb2.ListBoardRequest(node_id=self.node_id), timeout=self.timeout)
+            print("REACHED HERE", response.status)
             if response.status != 1:
                 return None
-            print_board(response.board_state, True)
+            print("REACHED HERE AS WELL")
+            print_board(response.board, True)
             return response.board
 
     def send_move(self, board_position, marker):
@@ -457,7 +469,8 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
         """Announces game over to all players"""
         nodes = dict(self.cluster_nodes())
         if not game.winner:
-            game.winner = [(game.player_o,"draw"), (game.player_x,"draw")]
+            player_x, player_o = game.players
+            game.winner = [(player_o,"draw"), (player_x,"draw")]
         for player, result in game.winner:
             print(player, result)
             player_address = nodes[player]
