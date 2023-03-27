@@ -268,9 +268,13 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
             self.leader_address = dict(self.cluster_nodes())[self.leader_id]
         return protocol_pb2.Acknowledged()
 
+    def node_time(self):
+        """Local node time in milliseconds since epoch"""
+        Timestamp().ToMilliseconds() + self.time_offset
+
     def GetTime(self, request, context):
         cur_time = Timestamp()
-        cur_time.FromMilliseconds(cur_time.ToMilliseconds() + self.time_offset)
+        cur_time.FromMilliseconds(self.node_time())
         return protocol_pb2.TimeResponse(time=cur_time)
 
     def AdjustClock(self, request, context):
