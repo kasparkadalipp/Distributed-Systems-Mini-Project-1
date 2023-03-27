@@ -42,22 +42,23 @@ class Game:
     def get_board(self):
         return "".join(self.board)
 
-
     def isInvalidMove(self, position, marker):
+        print(f"FVALUES {position}, {marker}")
         count_x = self.board.count("X")
         count_o = self.board.count("O")
-        if position < 0 or position > 9:
-            print("Invalid position")
+        if position < 0 or position > 8:
+            print("INVALID POSITION")
             return False
         if marker == "X" and count_x - count_o == 1:
-            print("Invalid move")
+            print("O SHOULD MOVE")
             return False
         if marker == "O" and count_o - count_x == 1:
-            print("MESSAGE 2")
+            print("x SHOULD MOVE")
             return False
         if self.board[position] != " ":
-            print("Already taken")
+            print("POSITION IS NOT EMPTY")
             return False
+        print("VALID MOVE")
         return True
 
     def move(self, marker, position):
