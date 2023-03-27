@@ -34,13 +34,14 @@ class Game:
         self.turn = 0
         self.winner = None
         self.winning_combination = None
-        self.players = [player_o, player_x]
+        self.players = [player_x, player_o]
         self.move_list = {}
-        self.player_x = player_x
-        self.player_o = player_o
 
     def get_board(self):
         return "".join(self.board)
+
+    def get_current_player(self):
+        return self.players[(self.board.count("X") + self.board.count("O")) % 2]
 
     def isInvalidMove(self, position, marker, player_id):
         print(f"FVALUES {position}, {marker}")
@@ -55,19 +56,22 @@ class Game:
         if marker == "O" and count_o - count_x == 1:
             print("x SHOULD MOVE")
             return True
-        if self.players[self.turn % 2] != player_id:
+        if self.get_current_player() != player_id:
+            print("PlayerID", player_id, "current player", self.get_current_player)
             print("NOT YOUR TURN")
             return True
-        # not right symbol:
         if self.board[position] != " ":
             print("POSITION IS NOT EMPTY")
             return True
-        marker_idx = 0 if marker == "O" else 1
-        if self.players[marker_idx] != player_id:
-            print("NOT YOUR SYMBOL")
+        # marker_idx = 0 if marker == "O" else 1
+        # if self.players[marker_idx] != player_id:
+        #     print("NOT YOUR SYMBOL")
             return True
         print("VALID MOVE")
         return False
+
+    def board_is_filled(self):
+        return self.board.count(" ") == 0
 
     def move(self, marker, position, player_id):
         if self.isInvalidMove(position, marker, player_id):
@@ -81,6 +85,7 @@ class Game:
         self.check_winner()
         return True
 
+
     def check_winner(self):
         winning_combination = [
             [0, 1, 2], [3, 4, 5], [6, 7, 8],
@@ -89,11 +94,14 @@ class Game:
         ]
         for combination in winning_combination:
             if self.board[combination[0]] == self.board[combination[1]] == self.board[combination[2]] != " ":
-                self.winner = self.board[combination[0]]
+                player_x, player_o = self.players
+                self.winner = [(player_x, "winner" if player_x == self.get_current_player else "loss"),
+                (player_o,  "winner" if player_x == self.get_current_player else "loss")]
                 self.winning_combination = combination
                 return True
-        if self.turn == 9:
-            self.winner = "Draw"
+        if self.board_is_filled():
+            player_x, player_o  = self.players
+            self.winner = [(player_x, "draw"), (player_o,"draw")]
             return True
         return False
 
@@ -409,16 +417,18 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
 
     def announce_game_over(self, game):
         """Announces game over to all players"""
-        nodes = self.cluster_nodes()
-        players = [nodes[game.player_x], nodes[game.player_y]]
-        self.winner_id = [player_id for player_id, player in self.players.items(
-        ) if player[1] == self.game.winner][0]
-        for player_id, player in self.players.items():
-            player_address, symbol = player
+        nodes = dict(self.cluster_nodes())
+
+        #result = [{nodes[player]: result for player, result in game.winner}]
+        # players = [nodes[game.player_x], nodes[game.player_y]]
+        # self.winner_id = [player_id for player_id, player in self.players.items(
+        # ) if player[1] == self.game.winner][0]
+        for player, result in game.winner:
+            player_address = nodes[player]
             with grpc.insecure_channel(player_address) as channel:
                 stub = protocol_pb2_grpc.GameServiceStub(channel)
                 stub.DeclareWinner(protocol_pb2.DeclareWinnerRequest(
-                    winner_id=self.winner_id), timeout=self.timeout)
+                    game_result=result), timeout=self.timeout)
 
     def DeclareWinner(self, request, context):
         """Announces winner"""
@@ -440,8 +450,8 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
         if game.winner:
             # TODO: Send winning messages to the players
             self.announce_game_over(game)
-            self.ongoing_games.pop(game.player_o)
-            self.ongoing_games.pop(game.player_x)
+            for player in game.players: self.ongoing_games.pop(player)
+
         else:
             # TODO: Request move from opponent
             opponent, symbol = game.get_player_turn()
