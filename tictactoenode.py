@@ -36,7 +36,7 @@ def print_board(board: str, timestamps=False):
 
 class Game:
 
-    def __init__(self, player_x, player_o):
+    def __init__(self, player_x, player_o, start_time):
         self.board = [" " for _ in range(9)]
         self.board_map = {}
         self.turn = 0
@@ -45,6 +45,7 @@ class Game:
         self.players = [player_x, player_o]
         self.markers = ["X", "O"]
         self.move_list = {}
+        self.start_time = time
 
     def get_board(self):
         s = []
@@ -130,6 +131,7 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
     def __init__(self, node_port, etcd_host, etcd_port):
         self.server = None
         self.timeout = 10  # timeout used for RPC calls in seconds
+        self.player_timeout = 1 # timeout in minutes for player
         self.leader_id = None
         self.port = node_port
         self.address = f"{get_host_ip()}:{self.port}"
@@ -182,8 +184,8 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
                         print(stub.SetClock(request).message)
 
                 elif match := re.match('^set-time-out' + 'players(\d+)$', user_input):
-                    timout = match.group(1)
-                    # TODO
+                    self.player_timeout = match.group(1)
+                    print(f"New time-out for players = {self.player_timeout} minute")
                 elif match := re.match('^set-time-out' + 'game-master(\d+)$', user_input):
                     timout = match.group(1)
                     # TODO
@@ -214,7 +216,18 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
                 self.election()
             if self.leader_id == self.node_id:
                 self.time_sync()
+                self.check_game_timeout()
             time.sleep(self.timeout)
+
+    def check_game_timeout():
+        current_time = self.node_time()
+        for game in set(self.ongoing_games.values()):
+            last_action = max([time for _, time in game.move_list.values()] + [game.start_time])
+            if (current_time - last_action)/1000/60 > self.player_timeout:
+                print(f"Timeout for game of node {game.player_o} and node {game.player_x}")
+                self.announce_game_over(game)
+                pop(self.ongoing_games, game.player_o)
+                pop(self.ongoing_games, game.player_x)
 
     def register(self):
         """Registers node within etcd so it is discoverable for other nodes"""
@@ -373,7 +386,7 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
             print(f"Player {request.request_id} is already part of an ongoing game")
             return protocol_pb2.JoinGameResponse(status=2)
         elif self.waiting_for_opponent:
-            game = Game(self.waiting_for_opponent, request.request_id)
+            game = Game(self.waiting_for_opponent, request.request_id, self.node_time())
             self.ongoing_games[self.waiting_for_opponent] = game
             self.ongoing_games[request.request_id] = game
             self.waiting_for_opponent = None
@@ -443,6 +456,8 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
     def announce_game_over(self, game):
         """Announces game over to all players"""
         nodes = dict(self.cluster_nodes())
+        if not game.winner:
+            game.winner = [(game.player_o,"draw"), (game.player_x,"draw")]
         for player, result in game.winner:
             print(player, result)
             player_address = nodes[player]
@@ -463,11 +478,10 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
         print(f"DEBUG: {player} {symbol}")
         # FIXME: check that the player is the one who's turn it is
         game = self.ongoing_games[request.request_id]
-        if not game.move(request.marker, request.board_position, request.request_id, self.formatted_time()):
+        if not game.move(request.marker, request.board_position, request.request_id, self.node_time()):
             return context.abort(grpc.StatusCode.INVALID_ARGUMENT, "Invalid move")
 
         if game.winner:
-            # TODO: Send final board state to both players
             self.announce_game_over(game)
             for player in game.players: self.ongoing_games.pop(player)
             return protocol_pb2.PlaceMarkerResponse(status=1, message=f"=========")
