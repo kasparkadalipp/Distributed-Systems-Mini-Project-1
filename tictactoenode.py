@@ -432,9 +432,7 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
 
     def DeclareWinner(self, request, context):
         """Announces winner"""
-        print(f"Game over. Winner: {request.winner_id}")
-        if request.winner_id == self.node_id:
-            print("=============WINNER!==============")
+        print(f"Game over: {request.game_result}")
         return protocol_pb2.Acknowledged()
 
     def PlaceMarker(self, request, context):
