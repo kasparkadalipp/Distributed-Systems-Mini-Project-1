@@ -117,7 +117,7 @@ class Game:
 class Node(protocol_pb2_grpc.GameServiceServicer):
     def __init__(self, node_port, etcd_host, etcd_port):
         self.server = None
-        self.timeout = 1  # timeout used for RPC calls in seconds
+        self.timeout = 10  # timeout used for RPC calls in seconds
         self.leader_id = None
         self.port = node_port
         self.address = f"{get_host_ip()}:{self.port}"
@@ -197,6 +197,8 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
             self.register()
             if not self.has_healthy_master():
                 self.election()
+            if self.leader_id == self.node_id:
+                self.time_sync()
             time.sleep(self.timeout)
 
     def register(self):
@@ -249,7 +251,6 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
             concurrent.futures.wait(_futures, timeout=self.timeout)
         for channel in channels.values():
             channel.close()
-        self.time_sync()  # Synchronizing time of all nodes
 
     def Echo(self, request, context):
         return protocol_pb2.Pong()
@@ -282,7 +283,6 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
         return protocol_pb2.SetClockResponse()
 
     def time_sync(self):
-        print("Starting time synchronization")
         channels = {node_id: grpc.insecure_channel(address) for (
             node_id, address) in self.cluster_nodes()}
         with concurrent.futures.ThreadPoolExecutor(max_workers=len(channels)) as executor:
