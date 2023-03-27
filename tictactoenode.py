@@ -22,13 +22,13 @@ def get_host_ip():
 
 
 def print_board(board: str, timestamps=False):
-    board.split(",")
+    board = board.split(",")
     if timestamps:
         board = [value.split(":")[0] for value in board]
     print((" {} | {} | {}\n"
-           "---+---+---\n"
+           "---+---+---\n" if not timestamps else "------------+------------+------------\n"
            " {} | {} | {}\n"
-           "---+---+---\n"
+           "---+---+---\n" if not timestamps else "------------+------------+------------\n"
            " {} | {} | {}").format(*board))
 
 class Game:
