@@ -99,7 +99,7 @@ class Game:
         if move_msg != "VALID MOVE":
             return False, move_msg
 
-        print(f"Player {marker} is moving to position {position}")
+        #print(f"Player {marker} is moving to position {position}")
 
         self.board[position] = marker
         self.move_list[position] = (marker, time_)
@@ -410,7 +410,7 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
         """Requests player to make a move"""
         nodes = dict(self.cluster_nodes())
         if player_id in nodes:
-            print(f"Requesting player {player_id} to make a move {marker}")
+            #print(f"Requesting player {player_id} to make a move {marker}")
             address = nodes[player_id]
             with grpc.insecure_channel(address) as channel:
                 stub = protocol_pb2_grpc.GameServiceStub(channel)
@@ -461,6 +461,7 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
 
     def announce_game_over(self, game):
         """Announces game over to all players"""
+        print("Game concluded")
         nodes = dict(self.cluster_nodes())
         if not game.winner:
             player_x, player_o = game.players
@@ -480,7 +481,6 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
         return protocol_pb2.Acknowledged()
 
     def PlaceMarker(self, request, context):
-        print("Game concluded")
         game = self.ongoing_games[request.request_id]
         move, move_message = game.move(request.marker, request.board_position, request.request_id, self.node_time())
         if not move:
