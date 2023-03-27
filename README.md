@@ -6,7 +6,8 @@ This project was implemented as part of the distributed systems course by follow
 - Joshua Katigbak
 
 ## Demo video
-<img src="/demo video.mp4" width="600"/>
+![Demo video]   <img src="/demo video.mp4" width="600"/>
+![Demo video]([https://github.com/Faizun-Faria/Thief-Robber-Landlord-Police/blob/main/Preview/gif_english.gif](https://github.com/kasparkadalipp/Distributed-Systems-Mini-Project-1/blob/main/demo%20video.mp4))
 
 ## Requirements
 
