@@ -5,6 +5,9 @@ This project was implemented as part of the distributed systems course by follow
 - Daniel Würsch
 - Joshua Katigbak
 
+## Demo video
+<img src="/demo video.mp4" width="600"/>
+
 ## Requirements
 
 Required applications:
