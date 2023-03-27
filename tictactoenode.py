@@ -163,7 +163,7 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
                     self.send_move(int(position), marker.upper())
                 elif re.match('^list-board$', user_input):
                     self.list_board()
-                elif re.match('^join$', user_input):
+                elif re.match('^start-game$', user_input):
                     self.join_game()
                 elif match := re.match(r'^get-node-time', user_input):
                     print("Time on current node:", datetime.fromtimestamp(self.node_time() / 1000))
