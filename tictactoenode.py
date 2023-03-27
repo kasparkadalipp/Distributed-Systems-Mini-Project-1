@@ -42,34 +42,29 @@ class Game:
     def get_board(self):
         return "".join(self.board)
 
-    def move(self, player, position):
-        symbol = "O" if player == 0 else "X"
-        print(f"Player {symbol} is moving to position {position}")
-        if self.board[position] == " ":
-            self.board[position] = symbol
-            self.move_list[position] = (symbol, datetime.datetime.now())
-            self.turn += 1
-            self.check_winner()
-            return True
-        else:
-            return False
 
     def isInvalidMove(self, position, marker):
         count_x = self.board.count("X")
         count_o = self.board.count("O")
         if position < 0 or position > 9:
+            print("Invalid position")
             return False
         if marker == "X" and count_x - count_o == 1:
+            print("Invalid move")
             return False
         if marker == "O" and count_o - count_x == 1:
+            print("MESSAGE 2")
             return False
         if self.board[position] != " ":
+            print("Already taken")
             return False
         return True
 
     def move(self, marker, position):
-        if self.isInvalidMove(position, marker):
-            return False
+        # if self.isInvalidMove(position, marker):
+        #     return False
+
+        print(f"Player {marker} is moving to position {position}")
 
         self.board[position] = marker
         self.move_list[position] = (marker, datetime.datetime.now())
@@ -365,10 +360,10 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
 
     def PlayerTurn(self, request, context):
         # FIXME: Print board and tell user to make its turn
-        print("Move request")
+        print(f"Move request {request.marker}")
         print_board(request.board_state)
         return protocol_pb2.PlayerTurnResponse(status=1,
-                                               message=f"Player {self.symbol} turn set; {str(request.board_state)}")
+                                               message=f"Player {request.marker} turn set; {str(request.board_state)}")
 
     def ListBoard(self, request, context):
         """Lists the board"""
@@ -390,13 +385,11 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
     def send_move(self, board_position, marker):
         """Sends move to leader"""
         leader_address = self.leader_address
-        if marker.upper() != self.symbol:
-            print("Wrong marker")
         with grpc.insecure_channel(leader_address) as channel:
             stub = protocol_pb2_grpc.GameServiceStub(channel)
             response = stub.PlaceMarker(
                 protocol_pb2.PlaceMarkerRequest(request_id=self.node_id, board_position=board_position,
-                                                marker=self.symbol), timeout=self.timeout)
+                                                marker=marker), timeout=self.timeout)
             if response.status == 1:
                 self.is_turn = False
                 print(response.message)
@@ -424,6 +417,7 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
 
     def PlaceMarker(self, request, context):
         game = self.ongoing_games[request.request_id]
+        opponent = None
         if not game.move(request.marker, request.board_position):
             return context.abort(grpc.StatusCode.INVALID_ARGUMENT, "Invalid move")
 
@@ -439,22 +433,14 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
 
         return protocol_pb2.PlaceMarkerResponse(
             status=1,
-            message=f"Player {self.player} placed marker at {request.board_position}, board: {self.game.get_board()}",
+            message=f"Player {request.marker} placed marker at {request.board_position}, board: {self.ongoing_games[opponent].get_board()}",
         )
 
 
 def main():
-    match len(sys.argv):
-        case 2:
-            node_port = int(sys.argv[1])
-            etcd_host, etcd_port = "localhost", 2379
-        case 3:
-            node_port = int(sys.argv[1])
-            etcd_host, etcd_port = sys.argv[2].split(":", 1)
-            etcd_port = int(etcd_port)
-        case _:
-            sys.exit(f"Usage: {sys.argv[0]} node-port [etcd-host:etcd-port]")
-
+    node_port = int(sys.argv[1])
+    etcd_host = "localhost"
+    etcd_port = 2379
     node = Node(node_port, etcd_host, etcd_port)
 
     while True:
