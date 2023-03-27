@@ -42,7 +42,14 @@ class Game:
         self.move_list = {}
 
     def get_board(self):
-        return "".join(self.board)
+        s = []
+        for i in range(9):
+            if i in self.move_list:
+                symbol, time = self.move_list[i]
+                s.append(f"{symbol}:{time}")
+            else:
+                s.append("")
+        return ",".join(self.board)
 
     def get_current_marker(self):
         return self.markers[self.turn % 2]
@@ -79,14 +86,14 @@ class Game:
     def board_is_filled(self):
         return self.board.count(" ") == 0
 
-    def move(self, marker, position, player_id):
+    def move(self, marker, position, player_id, time):
         if self.isInvalidMove(position, marker, player_id):
             return False
 
         print(f"Player {marker} is moving to position {position}")
 
         self.board[position] = marker
-        self.move_list[position] = (marker, datetime.now())
+        self.move_list[position] = (marker, time)
         self.turn += 1
         self.check_winner()
         return True
@@ -394,7 +401,7 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
 
     def PlayerTurn(self, request, context):
         print(f"=== {request.marker}'s turn (player)   ===")
-        print_board(request.board_state)
+        print_board(request.board_state, False)
         return protocol_pb2.PlayerTurnResponse(status=1,
                                                message=f"Player {request.marker} turn set; {request.board_state}")
 
@@ -412,7 +419,7 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
                 protocol_pb2.ListBoardRequest(), timeout=self.timeout)
             if response.status != 1:
                 return None
-            print(response.message)
+            print_board(response.board_state)
             return response.board
 
     def send_move(self, board_position, marker):
@@ -441,7 +448,7 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
 
     def DeclareWinner(self, request, context):
         """Announces winner"""
-        print_board(request.board_state)
+        print_board(request.board_state, False)
         print(f"Game over: {request.game_result}")
         return protocol_pb2.Acknowledged()
 
@@ -451,7 +458,7 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
         print(f"DEBUG: {player} {symbol}")
         # FIXME: check that the player is the one who's turn it is
         game = self.ongoing_games[request.request_id]
-        if not game.move(request.marker, request.board_position, request.request_id):
+        if not game.move(request.marker, request.board_position, request.request_id, self.formatted_time()):
             return context.abort(grpc.StatusCode.INVALID_ARGUMENT, "Invalid move")
 
         if game.winner:
