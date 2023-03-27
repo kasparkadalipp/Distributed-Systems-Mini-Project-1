@@ -419,7 +419,7 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
                     timeout=self.timeout)
 
     def PlayerTurn(self, request, context):
-        print(f"=== {request.marker}'s turn (player)   ===")
+        print(f"=== {request.marker}'s turn (player) =====")
         print_board(request.board_state, False)
         return protocol_pb2.PlayerTurnResponse(status=1,
                                                message=f"Player {request.marker} turn set; {request.board_state}")
@@ -478,6 +478,7 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
         return protocol_pb2.Acknowledged()
 
     def PlaceMarker(self, request, context):
+        print("Game concluded")
         game = self.ongoing_games[request.request_id]
         move, move_message = game.move(request.marker, request.board_position, request.request_id, self.node_time())
         if not move:
@@ -486,7 +487,7 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
         if game.winner:
             self.announce_game_over(game)
             for player in game.players: self.ongoing_games.pop(player)
-            return protocol_pb2.PlaceMarkerResponse(status=1, message="=========")
+            return protocol_pb2.PlaceMarkerResponse(status=1, message="")
         else:
             opponent, symbol = game.get_player_turn()
             self.request_player_to_move(opponent, symbol)
