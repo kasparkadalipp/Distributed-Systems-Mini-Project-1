@@ -419,7 +419,7 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
                 protocol_pb2.ListBoardRequest(), timeout=self.timeout)
             if response.status != 1:
                 return None
-            print_board(response.board_state)
+            print_board(response.board_state, True)
             return response.board
 
     def send_move(self, board_position, marker):
