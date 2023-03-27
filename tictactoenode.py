@@ -353,13 +353,13 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
             stub.JoinGame(request, timeout=self.timeout)
 
     def JoinGame(self, request, context):
-        # TODO: check that player isn't already part of an ongoing game
-
-        if request.request_id in self.ongoing_games:
+        if request.request_id == self.waiting_for_opponent:
+            print(f"Player {request.request_id} is already waiting for opponent")
+            return protocol_pb2.JoinGameResponse(status=2)
+        elif request.request_id in self.ongoing_games:
             print(f"Player {request.request_id} is already part of an ongoing game")
             return protocol_pb2.JoinGameResponse(status=2)
-
-        if self.waiting_for_opponent and self.waiting_for_opponent != request.request_id:
+        elif self.waiting_for_opponent:
             game = Game(self.waiting_for_opponent, request.request_id)
             self.ongoing_games[self.waiting_for_opponent] = game
             self.ongoing_games[request.request_id] = game
