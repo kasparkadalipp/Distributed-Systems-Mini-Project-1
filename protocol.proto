@@ -96,6 +96,7 @@ message Pong{}
 // ================== GAME LOGIC ======================
 message DeclareWinnerRequest {
   string game_result = 1;
+  string board_state = 2;
 }
 
 message PlaceMarkerRequest {

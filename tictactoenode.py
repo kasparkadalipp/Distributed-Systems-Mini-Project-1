@@ -428,10 +428,11 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
             with grpc.insecure_channel(player_address) as channel:
                 stub = protocol_pb2_grpc.GameServiceStub(channel)
                 stub.DeclareWinner(protocol_pb2.DeclareWinnerRequest(
-                    game_result=result), timeout=self.timeout)
+                    game_result=result, board_state=game.get_board()), timeout=self.timeout)
 
     def DeclareWinner(self, request, context):
         """Announces winner"""
+        print_board(request.board_state)
         print(f"Game over: {request.game_result}")
         return protocol_pb2.Acknowledged()
 
