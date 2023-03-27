@@ -20,7 +20,12 @@ def get_host_ip():
     hostname = socket.gethostname()
     return socket.gethostbyname(hostname)
 
-
+def print_board(board:str):
+    print((" {} | {} | {}\n"
+            "---+---+---\n"
+            " {} | {} | {}\n"
+            "---+---+---\n"
+            " {} | {} | {}").format(*[_ for _ in board]))
 class Game:
 
     def __init__(self, player_x, player_o):
@@ -34,15 +39,8 @@ class Game:
         self.player_x = player_x
         self.player_o = player_o
 
-    def print_board(self):
-        print((" {} | {} | {}\n"
-                "---+---+---\n"
-                " {} | {} | {}\n"
-                "---+---+---\n"
-                " {} | {} | {}").format(*self.board))
-
     def get_board(self):
-        return self.board
+        return "".join(self.board)
 
     def move(self, player, position):
         symbol = "O" if player == 1 else "X"
@@ -360,8 +358,8 @@ class Node(protocol_pb2_grpc.GameServiceServicer):
 
     def PlayerTurn(self, request, context):
         # FIXME: Print board and tell user to make its turn
-        print("CALL PLAYER TURN")
-        print(str(request.board_state))
+        print("Move request")
+        print_board(request.board_state)
         return protocol_pb2.PlayerTurnResponse(status=1,
                                                message=f"Player {self.symbol} turn set; {str(request.board_state)}")
 
